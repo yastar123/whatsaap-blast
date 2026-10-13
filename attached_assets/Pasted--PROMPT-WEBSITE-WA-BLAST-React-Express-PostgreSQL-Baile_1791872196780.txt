@@ -1,0 +1,214 @@
+# PROMPT: WEBSITE WA BLAST (React + Express + PostgreSQL + Baileys)
+
+Kamu adalah senior full-stack engineer. Buatkan website **WA Blast** lengkap dan siap dijalankan dengan spesifikasi di bawah. Kerjakan bertahap, tulis kode lengkap (bukan potongan), dan sertakan README cara instalasi.
+
+---
+
+## 1. TECH STACK
+
+- **Frontend:** ReactJS (Vite), React Router, TailwindCSS, Axios, TanStack Query. Berjalan di **port 3000**.
+- **Backend:** ExpressJS (Node.js), REST API, JWT auth (access + refresh token), bcrypt, helmet, cors, express-rate-limit, zod untuk validasi. Berjalan di **port 5000**.
+- **Database:** PostgreSQL (gunakan Prisma atau Knex, sertakan migration dan seed).
+- **Library WhatsApp:** **Baileys** (`@whiskeysockets/baileys`), multi-session, session disimpan ke disk/DB per akun WA.
+- **Realtime:** Socket.IO untuk update progres blast, status WA, dan QR.
+- **Export:** `exceljs` (xlsx) dan CSV.
+- **Antrean:** BullMQ + Redis (opsional) atau antrean internal berbasis tabel PostgreSQL.
+
+---
+
+## 2. MODEL BISNIS
+
+- Aplikasi **GRATIS**. Tidak ada langganan, paket, billing, atau masa aktif.
+- Pelanggan **dibayar** per pesan berhasil terkirim.
+- Pendapatan pengirim: **Rp1.100 per pesan berhasil**.
+- Bonus referral: **Rp50 per pesan berhasil** dari downline, masuk ke pengundang.
+- Penarikan (withdraw) minimum **Rp15.000**.
+- Saldo dibagi: **saldo pending** (baru dihitung) dan **saldo utama** (siap ditarik). Sediakan pengaturan admin untuk aturan perpindahan pending ke utama (misal otomatis setelah X jam atau manual oleh admin).
+
+---
+
+## 3. ROLE
+
+1. **Admin**: mengelola pelanggan, campaign, kontak, melihat hasil, transaksi, referral, withdraw, pengaturan.
+2. **Pelanggan**: menghubungkan WhatsApp, menjalankan blast, melihat progres, hasil, saldo, referral, withdraw, riwayat.
+
+Aturan penting:
+- **Dashboard pelanggan TIDAK punya menu Campaign.** Campaign sepenuhnya diurus admin.
+- **Tombol Mulai Blast hanya ada di pelanggan, bukan admin.**
+- Pelanggan tidak memilih campaign. Sistem otomatis memakai **campaign aktif** yang ditentukan admin.
+
+---
+
+## 4. MENU DASHBOARD ADMIN
+
+1. Dashboard (ringkasan: total pelanggan, WA online, campaign aktif, total pesan terkirim, total pembayaran)
+2. Pelanggan (daftar, detail, blokir/aktifkan)
+3. Kontak (upload CSV/Excel, tambah manual, hapus, validasi format nomor, deteksi duplikat, kelompokkan per campaign)
+4. Campaign
+   - Buat, edit, daftar, hapus
+   - Pesan: teks, gambar (upload), tombol CTA, URL tujuan tombol
+   - Pilih campaign aktif
+   - Atur kontak target campaign
+   - Lihat status dan hasil campaign
+5. Hasil Blast (lihat bagian 7)
+6. Earning dan Transaksi
+7. Referral
+8. Withdraw (setujui, tolak, tandai dibayar, catatan)
+9. Pengaturan (nominal per pesan, bonus referral, minimum withdraw, aturan pending ke utama, delay yang diizinkan)
+
+---
+
+## 5. MENU DASHBOARD PELANGGAN
+
+1. Dashboard
+2. WhatsApp
+   - Tambah **banyak** nomor WA (QR atau pairing code)
+   - Status per nomor: online / offline / menghubungkan
+   - Putuskan / hapus sesi
+3. Mulai Blast
+   - Tombol **Mulai Blast** dan **Batalkan Blast**
+   - Pengaturan delay: **1, 5, 15, 30 detik**
+   - Tampilan realtime: saldo berjalan, terkirim, gagal, pending, progres (bar dan persen), status blast
+   - Progres gabungan dan per nomor WA
+4. Progres
+5. Hasil (lihat bagian 7)
+6. Saldo dan Earning (saldo utama, pendapatan berjalan, pending, riwayat pendapatan)
+7. Referral (kode/link referral, daftar downline, pendapatan referral)
+8. Withdraw (ajukan penarikan, status)
+9. Riwayat (blast, pendapatan, referral, penarikan)
+
+---
+
+## 6. LOGIKA BLAST (INTI SISTEM)
+
+**Multi-session, bukan satu nomor saja.**
+
+1. Pelanggan boleh punya banyak akun WA (session Baileys terpisah, tiap session punya folder auth sendiri).
+2. Saat pelanggan menekan **Mulai Blast**:
+   - Sistem mengambil campaign aktif.
+   - Sistem mengambil kontak campaign yang statusnya **belum dikirim** dan belum dikunci pelanggan lain.
+   - Sistem mengambil semua WA pelanggan yang **online**.
+   - Kontak **dibagi rata** ke semua WA online. Contoh: admin menyediakan 300 kontak, pelanggan punya 3 WA online, maka tiap WA mendapat sekitar 100 kontak.
+   - Tiap WA mengirim **paralel**, dengan jeda sesuai delay yang dipilih pelanggan.
+3. Blast bisa berjalan **selama campaign masih tersedia** (masih ada kontak belum dikirim).
+4. **Anti dobel:** satu kontak untuk satu campaign hanya boleh dikirim **sekali** di seluruh sistem. Gunakan penguncian di database (`SELECT ... FOR UPDATE SKIP LOCKED` atau status `diproses` dengan lock), supaya beberapa pelanggan yang blast bersamaan tidak mengirim ke kontak yang sama.
+5. Jika satu WA terputus di tengah blast, kontak yang belum terkirim dari WA itu dikembalikan ke status **belum dikirim** agar bisa diambil WA lain. (Buat sebagai pengaturan yang mudah diubah.)
+6. **Batalkan Blast:** hentikan antrean, kembalikan kontak yang belum terkirim ke status **belum dikirim**, dan putuskan sesi blast yang sedang berjalan.
+7. Setiap pesan sukses: tambah saldo pelanggan Rp1.100 (masuk pending), tambah bonus Rp50 ke pengundang jika ada referral, simpan ke tabel transaksi.
+8. Tambahkan perlindungan: jitter acak kecil pada delay, batas pesan per WA per jam (configurable), retry terbatas untuk error sementara, penanganan nomor tidak terdaftar di WhatsApp (tandai **gagal** dengan alasan).
+9. Kirim pesan teks, gambar dengan caption, dan tombol CTA (gunakan fallback teks berisi URL bila tombol interaktif tidak didukung).
+
+---
+
+## 7. HALAMAN HASIL (ADMIN DAN PELANGGAN)
+
+Fitur wajib:
+
+1. **Filter status:** `Semua`, `Berhasil`, `Gagal`, `Pending`, `Belum Dikirim`.
+   - **Berhasil:** pesan terkirim (sent/delivered).
+   - **Gagal:** error atau nomor tidak valid (tampilkan alasan gagal).
+   - **Pending:** sedang diproses atau menunggu giliran dalam blast aktif.
+   - **Belum Dikirim:** kontak campaign yang belum pernah diproses.
+2. **Pencarian nomor tujuan** (search box, partial match, debounce).
+3. **Ringkasan:** total kontak yang diproses dan **persentase keberhasilan** (berhasil / total diproses x 100%). Tampilkan juga kartu jumlah per status.
+4. **Unduh laporan Excel (.xlsx) dan CSV.** Laporan mengikuti filter dan pencarian yang sedang aktif. Kolom: nomor tujuan, campaign, status, alasan gagal, WA pengirim, waktu kirim.
+5. **Riwayat hasil per campaign:** daftar campaign dengan ringkasan (total, berhasil, gagal, pending, belum dikirim, persentase), klik untuk membuka detail per nomor.
+6. Tabel dengan pagination server-side, sort berdasarkan waktu.
+7. Admin melihat hasil semua pelanggan (ada filter pelanggan). Pelanggan hanya melihat hasil blast miliknya.
+
+---
+
+## 8. SKEMA DATABASE (MINIMAL)
+
+- `users` (id, name, email, password_hash, role, referral_code, referred_by, status, created_at)
+- `wa_sessions` (id, user_id, phone, label, status, auth_path, last_connected_at)
+- `campaigns` (id, title, message_text, image_url, cta_text, cta_url, is_active, status, created_at)
+- `contacts` (id, campaign_id, phone, status [belum_dikirim|pending|berhasil|gagal], locked_by_user_id, locked_at, wa_session_id, error_reason, sent_at)
+- `blast_jobs` (id, user_id, campaign_id, delay_seconds, status, total, sent, failed, pending, started_at, finished_at, cancelled_at)
+- `blast_job_sessions` (id, blast_job_id, wa_session_id, assigned_count, sent, failed)
+- `transactions` (id, user_id, type [earning|referral|withdraw], amount, status [pending|utama], ref_id, created_at)
+- `withdrawals` (id, user_id, amount, bank/e-wallet info, status, note, created_at, processed_at)
+- `settings` (key, value)
+
+Tambahkan index pada `contacts(campaign_id, status)`, `contacts(phone)`, dan `transactions(user_id, created_at)`.
+
+---
+
+## 9. API (CONTOH ENDPOINT)
+
+- Auth: `POST /api/auth/register`, `/login`, `/refresh`, `/logout`
+- WA: `GET/POST/DELETE /api/wa-sessions`, event Socket.IO untuk QR dan status
+- Blast: `POST /api/blast/start`, `POST /api/blast/cancel`, `GET /api/blast/current`
+- Hasil: `GET /api/results?campaignId=&status=&search=&page=`, `GET /api/results/summary`, `GET /api/results/export?format=xlsx|csv`, `GET /api/results/campaigns`
+- Admin: CRUD `/api/admin/campaigns`, `/api/admin/contacts`, `/api/admin/users`, `/api/admin/withdrawals`, `/api/admin/settings`
+- Keuangan: `GET /api/wallet`, `POST /api/withdraw`, `GET /api/referrals`
+
+---
+
+## 10. KEAMANAN DAN KUALITAS
+
+- Role-based access control di backend dan frontend.
+- Validasi input, sanitasi upload gambar (tipe dan ukuran), rate limiting.
+- Withdraw hanya jika saldo utama cukup dan minimal Rp15.000.
+- Semua perhitungan uang di backend dalam transaksi database (atomic), tidak percaya angka dari frontend.
+- Environment variable lewat `.env` (sertakan `.env.example`).
+- UI responsif, bahasa Indonesia, tampilan bersih dengan loading dan empty state.
+- Sertakan seed: 1 akun admin, 1 pelanggan contoh, 1 campaign dengan 300 kontak dummy.
+
+---
+
+## 11. DESAIN UI (WAJIB DIIKUTI)
+
+**Arah desain:** dark mode, clean, modern, elegant. Terasa seperti produk SaaS profesional (referensi rasa: Linear, Vercel, Stripe Dashboard), **bukan** template generik buatan AI.
+
+**Palet warna (satu tema gelap, definisikan sebagai CSS variables / Tailwind tokens):**
+- Background utama: `#0B0D10` (hitam kebiruan lembut, bukan hitam murni `#000`)
+- Surface (kartu, sidebar): `#12151A`
+- Surface terangkat (dropdown, modal, hover): `#181C22`
+- Border: `#232830` (garis 1px tipis, ini pemisah utama, bukan bayangan)
+- Teks utama: `#E6E8EB`, teks sekunder: `#8A919C`, teks redup: `#5C6370`
+- **Satu warna aksen saja**: hijau halus `#3DD68C` (dipakai untuk tombol utama, link aktif, fokus, indikator penting). Jangan pakai banyak warna aksen.
+- Warna status (dipakai konsisten di badge, progress, dan chart):
+  - Berhasil: hijau `#3DD68C`
+  - Gagal: merah `#F26D6D`
+  - Pending: kuning `#E5B454`
+  - Belum Dikirim: abu `#8A919C`
+- Badge status memakai latar transparan tipis (warna 12% opacity) + teks warna penuh, bukan blok warna pekat.
+
+**Tipografi:**
+- Font UI: **Inter** (atau Geist). Nominal uang dan angka statistik pakai `font-variant-numeric: tabular-nums`.
+- Nomor telepon dan ID pakai font mono (JetBrains Mono / Geist Mono).
+- Hierarki jelas: judul halaman 20-24px semi-bold, label 12-13px, isi 14px. Hindari ukuran font yang berlebihan.
+- Format uang Indonesia: `Rp1.100`, `Rp15.000` (`Intl.NumberFormat('id-ID')`).
+
+**Layout dan komponen:**
+- Sidebar kiri tetap (collapsible di mobile) + topbar tipis. Konten maksimal lebar nyaman, grid 8px.
+- Radius sedang (8-10px), bukan bulat besar. Tanpa bayangan tebal; pakai border 1px dan perbedaan warna surface.
+- Tabel padat dan rapi (header sticky, baris hover halus, pagination di bawah), ini komponen paling penting di halaman Hasil dan Transaksi.
+- Kartu statistik sederhana: label kecil, angka besar, keterangan perubahan kecil. Tanpa ikon dekoratif berlebihan.
+- Progress blast: bar tipis dengan persen dan angka (terkirim / gagal / pending), update realtime, ada ringkasan per nomor WA.
+- Ikon: **Lucide** saja, ukuran dan ketebalan stroke seragam. **Dilarang pakai emoji sebagai ikon.**
+- Form: label di atas input, fokus ring hijau tipis, pesan error singkat di bawah field.
+- Wajib ada: skeleton loading, empty state yang informatif (satu kalimat + satu aksi), toast notifikasi kecil, konfirmasi untuk aksi berbahaya (batalkan blast, hapus campaign, tolak withdraw).
+- Animasi minimal dan halus (150-200ms, transisi warna/opacity). Tanpa animasi berlebihan.
+
+**YANG DILARANG (ciri "AI slop"):**
+- Gradien ungu-biru, gradien pada teks, efek neon/glow, glassmorphism berlebihan, blob dekoratif.
+- Kartu bertumpuk dengan bayangan besar, sudut terlalu bulat, ikon berwarna-warni di setiap kartu.
+- Hero section generik, ilustrasi stok, teks pemasaran berlebihan di dalam dashboard.
+- Emoji di UI, judul bertele-tele, copywriting klise ("Powerful", "Seamless", "Unlock").
+- Banyak warna aksen sekaligus, kontras teks rendah yang susah dibaca.
+
+**Halaman login/daftar:** sederhana, satu kartu terpusat di latar gelap, logo teks kecil, tanpa ilustrasi besar.
+
+**Responsif dan aksesibilitas:** nyaman di mobile (pelanggan kemungkinan banyak pakai HP), target sentuh minimal 40px, kontras teks memenuhi WCAG AA.
+
+---
+
+## 12. HASIL YANG DIMINTA
+
+1. Struktur folder `client/` dan `server/`.
+2. Kode lengkap backend (routes, controllers, services, Baileys manager, blast worker).
+3. Kode lengkap frontend (halaman admin dan pelanggan).
+4. Migration dan seed database.
+5. README: instalasi, menjalankan di port 3000 (frontend) dan 5000 (backend), cara menghubungkan WA.
