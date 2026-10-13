@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "WA Campaign Dashboard"
+description = "A role-based WhatsApp campaign dashboard for managing opted-in contacts, campaign progress, results, referrals, and earnings with consent-aware messaging controls."
+version = "1.0.0"
+id = "artifacts/wa-campaign"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24356
+
+[services.development]
+run = "pnpm --filter @workspace/wa-campaign run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/wa-campaign", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/wa-campaign/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24356"
+BASE_PATH = "/"
