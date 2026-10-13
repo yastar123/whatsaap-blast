@@ -329,7 +329,8 @@ a { color: inherit; text-decoration: none; }
 .brand-lockup small { display: block; margin-top: 5px; font-size: 8px; letter-spacing: 1.6px; color: #9ba5a2; font-weight: 600; }
 .workspace-label { margin: 42px 12px 14px; font-family: var(--app-font-mono); font-size: 9px; letter-spacing: 1.25px; color: #909a9b; display: flex; align-items: center; gap: 9px; }
 .workspace-dot, .system-status span, .date-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #69b898; box-shadow: 0 0 0 3px rgba(105,184,152,.12); }
-.side-nav { overflow-y: auto; flex: 1; }
+.side-nav { overflow-y: auto; flex: 1; scrollbar-width: none; -ms-overflow-style: none; }
+.side-nav::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .nav-group { margin: 0 0 25px; }
 .nav-heading { font-size: 10px; color: #858f91; padding: 0 12px 9px; }
 .nav-link { color: #b8c0bc; height: 40px; display: flex; gap: 12px; padding: 0 12px; align-items: center; border-radius: 7px; font-size: 12px; font-weight: 500; margin: 2px 0; transition: background .18s, color .18s, transform .18s; position: relative; }
