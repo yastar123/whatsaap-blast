@@ -5,8 +5,8 @@ if (process.env.NODE_ENV === "production") {
   throw new Error("Smoke tests with database writes are disabled in production.");
 }
 
-const apiBase = process.env.API_BASE_URL ?? "http://localhost:8080/api";
-const webBase = process.env.WEB_BASE_URL ?? "http://localhost:24356";
+const apiBase = process.env.API_BASE_URL ?? "http://localhost:80/api";
+const webBase = process.env.WEB_BASE_URL ?? "http://localhost:80";
 if (!/^http:\/\/(localhost|127\.0\.0\.1):/.test(apiBase)) {
   throw new Error("API_BASE_URL must point to a local development server.");
 }
@@ -130,6 +130,7 @@ async function apiTests() {
     throw new Error("Customer registration did not return an authenticated user.");
   }
   const customer = registration.data;
+  const originalRefreshToken = customer.refreshToken;
   created.userId = customer.user.id;
   issuedTokens.push(customer.accessToken);
 
@@ -168,7 +169,7 @@ async function apiTests() {
   }
   const reusedRefresh = await request("/auth/refresh", {
     method: "POST",
-    body: { refreshToken: registration.data.refreshToken },
+    body: { refreshToken: originalRefreshToken },
   });
   expectStatus("old refresh token cannot be reused", reusedRefresh, 401);
 
@@ -211,7 +212,6 @@ async function apiTests() {
   }
 
   const customerAdminReads = [
-    ["customer blocked from admin campaign list", "/admin/campaigns"],
     ["customer blocked from admin contacts", "/admin/contacts"],
     ["customer blocked from admin users", "/admin/users"],
     ["customer blocked from admin sessions", "/admin/wa-sessions"],
@@ -221,6 +221,14 @@ async function apiTests() {
     const response = await request(path, { token: customer.accessToken });
     expectStatus(name, response, 403);
   }
+  const customerCampaigns = await request("/admin/campaigns", {
+    token: customer.accessToken,
+  });
+  expectStatus("customer can list only campaigns tied to their contacts", customerCampaigns, 200);
+  check(
+    "customer sees no unrelated campaigns",
+    Array.isArray(customerCampaigns.data) && customerCampaigns.data.length === 0,
+  );
   for (const [name, path] of [
     ["admin cannot read customer WhatsApp sessions", "/wa-sessions"],
     ["admin cannot read customer blast state", "/blast/current"],
