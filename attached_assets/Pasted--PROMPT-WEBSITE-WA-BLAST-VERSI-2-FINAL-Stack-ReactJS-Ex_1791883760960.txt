@@ -1,0 +1,260 @@
+# PROMPT: WEBSITE WA BLAST (VERSI 2, FINAL)
+Stack: ReactJS + ExpressJS + PostgreSQL + Baileys
+Domain rencana: boleblast.my.id
+
+Kamu adalah senior full-stack engineer. Ikuti spesifikasi di bawah dengan teliti. Tulis kode lengkap (bukan potongan), dan jangan menambah fitur di luar daftar tanpa bertanya.
+
+---
+
+## 0. MODE KERJA
+
+- **Jika kode proyek sudah ada di folder ini:** AUDIT dulu. Baca struktur kode, bandingkan dengan spesifikasi ini, lalu buat daftar gap dan bug (terutama bagian 6, 7, dan 8). Perbaiki hanya yang kurang atau salah. **Fitur yang sudah berjalan benar TIDAK BOLEH diubah tanpa persetujuan pemilik proyek.** Tampilkan ringkasan perubahan sebelum menerapkan perubahan besar.
+- **Jika belum ada kode:** bangun dari nol sesuai spesifikasi, bertahap per modul.
+- Di akhir, jalankan pengujian semua fitur (bagian 11) dan laporkan hasilnya.
+
+---
+
+## 1. TECH STACK
+
+- **Frontend:** ReactJS (Vite), React Router, TailwindCSS, Axios, TanStack Query. Port **3000**.
+- **Backend:** ExpressJS (Node.js), REST API, JWT (access + refresh), bcrypt, helmet, cors, express-rate-limit, zod. Port **5000**.
+- **Database:** PostgreSQL (Prisma atau Knex, dengan migration dan seed).
+- **WhatsApp:** **Baileys** (`@whiskeysockets/baileys`), multi-session.
+- **Realtime:** Socket.IO (progres, saldo berjalan, status WA, QR/pairing).
+- **Export:** `exceljs` (xlsx) dan CSV.
+- Konfigurasi lewat `.env` (sertakan `.env.example`).
+
+---
+
+## 2. MODEL BISNIS DAN ATURAN UANG
+
+- Aplikasi **gratis**, pelanggan **tidak perlu deposit**, tanpa langganan.
+- Pelanggan dibayar per pesan **berhasil** terkirim: **Rp1.100 per pesan** (nilai ini disimpan di Pengaturan Sistem agar bisa diubah admin).
+- Pesan **gagal tidak menghasilkan komisi**.
+- **Bonus referral: Rp60 per pesan berhasil** dari pelanggan yang direferensikan (disimpan di Pengaturan Sistem). Bonus masuk **langsung ke saldo utama** pemberi referral. **Tidak ada potongan** dari penghasilan pelanggan yang direferensikan.
+- **Minimum penarikan Rp15.000.** Tidak ada batas maksimum.
+- **Saldo berjalan (realtime):** selama blast, setiap pesan berhasil langsung menambah saldo berjalan pelanggan. Contoh: 1 pesan berhasil = Rp1.100, 2 pesan = Rp2.200, dan seterusnya.
+- **Pemindahan ke saldo utama:** setelah blast **selesai**, **dihentikan** pelanggan, atau **tidak bisa mengirim lagi** (semua WA putus atau kontak habis), total saldo berjalan dipindahkan **otomatis** ke saldo utama, tepat **satu kali** per blast job (idempoten).
+- Semua perhitungan uang dilakukan di backend dalam transaksi database yang atomic. Jangan percaya angka dari frontend.
+- **Pencatatan tidak boleh ganda:** satu pesan berhasil hanya boleh menghasilkan satu catatan penghasilan dan satu catatan bonus referral. Gunakan unique constraint pada id pesan/kontak di tabel transaksi.
+
+---
+
+## 3. ROLE DAN HAK AKSES
+
+Dua role terpisah: **Admin** dan **Pelanggan**, satu halaman login. Hak akses dipisah di backend (middleware) dan frontend (route guard).
+
+- Admin mengendalikan kampanye, pesan, dan database kontak.
+- Pelanggan **hanya bisa menjalankan kampanye yang disediakan admin**. Pelanggan **tidak bisa mengedit pesan dan tidak bisa melihat database kontak**.
+- **Dashboard pelanggan tidak punya menu Campaign.** Pelanggan tidak memilih campaign, sistem otomatis memakai campaign aktif dari admin.
+- **Tombol Mulai Blast hanya ada di pelanggan**, bukan di admin.
+
+---
+
+## 4. MENU ADMIN
+
+1. Dashboard Admin
+2. Manajemen Pelanggan (daftar, detail, blokir/aktifkan)
+3. Manajemen Akun WhatsApp (semua sesi WA semua pelanggan: nomor, pemilik, status, putuskan sesi)
+4. Manajemen Kampanye (buat, edit, hapus, tentukan campaign aktif, lihat status dan hasil)
+5. Manajemen Database Kontak (upload CSV/Excel, tambah manual, hapus, normalisasi nomor ke format 62xxx, deteksi duplikat, kelompokkan per campaign)
+6. Manajemen Pesan: teks, gambar (upload) dengan caption, **link URL**, dan **nama tombol CTA** (contoh: `Play Now & Win`, atau bebas diisi admin)
+7. Statistik Pengiriman
+8. Manajemen Saldo Pelanggan (lihat saldo berjalan dan saldo utama, penyesuaian manual dengan catatan dan log)
+9. Manajemen Penghasilan
+10. Manajemen Referral
+11. Manajemen Penarikan Dana (lihat bagian 7)
+12. Laporan Transaksi
+13. Riwayat Aktivitas dan Log Sistem
+14. Pengaturan Sistem (nominal per pesan, bonus referral, minimum penarikan, delay yang diizinkan, batas pesan per jam per WA, durasi idle sesi)
+
+## 5. MENU PELANGGAN
+
+1. Dashboard
+2. Tambah WhatsApp
+3. Daftar WhatsApp Saya (+ pairing code dan QR, status online/offline per nomor, pairing ulang, hapus)
+4. Mulai Blast (tombol Mulai dan Batalkan/Hentikan)
+5. Pengaturan Jeda Pengiriman: **1, 5, 15, 30 detik**
+6. Progres Pengiriman (saldo berjalan realtime, terkirim, gagal, pending, persen, status, per nomor WA)
+7. Hasil Pengiriman (lihat bagian 9)
+8. Dompet / Saldo Saya (saldo utama, saldo berjalan)
+9. Riwayat Penghasilan
+10. Penarikan Dana
+11. Referral (kode dan tautan referral, daftar downline, statistik)
+12. Riwayat Bonus Referral
+13. Profil Saya
+14. Pengaturan Akun
+15. Logout
+
+---
+
+## 6. LOGIKA BLAST DAN MULTI-SESSION (BAGIAN PALING KRITIS)
+
+### 6.1 Bug yang HARUS diperbaiki
+Masalah yang terjadi saat ini: pelanggan menghubungkan 2 WA. Blast pertama dengan WA 1 berhasil dan WA 1 tetap terhubung. Lalu WA 2 dihubungkan dan blast dijalankan lagi, **tetapi yang mengirim pesan malah WA 1**, bukan WA 2. Penyebab yang harus dicek dan diperbaiki:
+- Socket Baileys disimpan di variabel global/singleton, atau dalam map dengan key yang salah (misal key berdasarkan user, bukan `sessionId`).
+- Worker blast mengambil "socket pertama yang online" alih-alih socket milik sesi yang ditugaskan.
+
+Aturan wajib:
+1. Simpan semua socket dalam `Map<sessionId, socket>`. Setiap sesi punya folder auth sendiri (`sessions/<sessionId>`), tidak boleh berbagi.
+2. Setiap worker blast **terikat ke satu `sessionId`** dan hanya memakai socket sesi itu.
+3. Sebelum mengirim, verifikasi `socket.user.id` sama dengan nomor sesi yang tercatat. Jika tidak cocok, hentikan worker itu dan tandai error (jangan kirim).
+4. Simpan **nomor WA pengirim (`wa_session_id`)** di setiap hasil pengiriman, agar bisa diaudit di halaman Hasil dan Log.
+5. Penghasilan dicatat ke **pemilik sesi WA yang benar-benar mengirim**.
+
+### 6.2 Pembagian kontak (global, tanpa kirim dua kali)
+- Satu campaign punya satu pool kontak. **Pool ini dipakai bersama oleh semua pelanggan yang sedang blast.**
+- Contoh: admin menyediakan **200 kontak**, ada **5 pelanggan** dengan 5 WA online yang blast bersamaan, maka 200 kontak terbagi ke 5 WA tersebut (sekitar 40 per WA). Jika satu pelanggan punya 3 WA online, tiap WA tetap menjadi pekerja sendiri dan mengambil bagian dari pool yang sama.
+- Implementasi pembagian: **klaim dinamis**, bukan pembagian statis. Setiap worker mengambil kontak berikutnya secara atomic, sehingga pembagian otomatis merata dan WA yang lebih cepat mengambil lebih banyak. Contoh query:
+  ```sql
+  UPDATE contacts
+  SET status = 'pending', wa_session_id = $1, locked_at = now()
+  WHERE id = (
+    SELECT id FROM contacts
+    WHERE campaign_id = $2 AND status = 'belum_dikirim'
+    ORDER BY id
+    FOR UPDATE SKIP LOCKED
+    LIMIT 1
+  )
+  RETURNING *;
+  ```
+- **Aturan emas: nomor kontak yang sudah dikirimi pesan TIDAK BOLEH dikirimi lagi** untuk campaign yang sama, oleh pelanggan mana pun. Terapkan lewat:
+  - Unique constraint `(campaign_id, phone)` pada kontak setelah normalisasi nomor.
+  - Klaim atomic seperti di atas.
+  - Kontak berstatus `berhasil`, atau `pending` yang sudah punya id pesan WhatsApp, tidak pernah dikembalikan ke antrean.
+- **Pemulihan:** jika worker mati atau WA terputus dan kontak berstatus `pending` **belum punya id pesan** (belum benar-benar terkirim), kembalikan ke `belum_dikirim` agar diambil WA lain. Jika sudah ada id pesan, jangan kirim ulang.
+- Blast bisa berjalan selama masih ada kontak `belum_dikirim` pada campaign aktif.
+
+### 6.3 Alur Mulai dan Batalkan
+- **Mulai Blast:** ambil campaign aktif, ambil semua WA pelanggan yang online, jalankan satu worker per WA secara paralel dengan delay pilihan pelanggan (1/5/15/30 detik) ditambah jitter acak kecil. Pelanggan tidak memilih WA pengirim; **pemilihan akun pengirim otomatis oleh sistem**.
+- **Batalkan/Hentikan:** hentikan semua worker pelanggan itu, kembalikan kontak `pending` yang belum terkirim ke `belum_dikirim`, lalu pindahkan saldo berjalan ke saldo utama.
+- **Selesai atau tidak bisa mengirim lagi:** pindahkan saldo berjalan ke saldo utama (satu kali).
+- Perlindungan: batas pesan per WA per jam (configurable), retry terbatas untuk error sementara, nomor tidak terdaftar di WhatsApp ditandai `gagal` beserta alasan.
+- Pesan mendukung teks, gambar + caption, URL, dan tombol interaktif **sesuai kemampuan metode pengiriman** Baileys. Jika tombol interaktif tidak didukung, fallback ke teks yang memuat nama tombol dan URL.
+
+### 6.4 Siklus hidup sesi WhatsApp
+- Tambah akun lewat nomor WA; pairing lewat **pairing code atau QR**.
+- Status: `menghubungkan`, `terhubung`, `terputus`, `tidak_aktif`.
+- Pelanggan bisa punya banyak akun WA.
+- Tangani koneksi terputus: reconnect otomatis terbatas, lalu tandai `terputus` dan sediakan pairing ulang.
+- **Idle 10 menit:** jika kampanye sudah selesai dan tidak ada pengiriman lanjutan selama 10 menit, sesi menjadi `tidak_aktif` dan resource (socket, memori, listener) dilepas. Saat dipakai lagi, pelanggan melakukan **pairing ulang** sesuai aturan sesi. (Durasi 10 menit bisa diubah di Pengaturan Sistem.)
+- Hindari memory leak: bersihkan listener dan timer saat sesi ditutup.
+
+---
+
+## 7. PENARIKAN DANA (MANUAL)
+
+Penarikan **manual**, tanpa payment gateway.
+
+**Alur:**
+1. Pelanggan mengisi form: nominal, nama pemilik rekening, bank/e-wallet, nomor rekening/e-wallet. Validasi: nominal >= Rp15.000 dan <= saldo utama.
+2. Setelah klik Ajukan, permintaan **langsung muncul di halaman Penarikan Dana admin** (beri penanda jumlah permintaan baru).
+3. Admin melihat data pelanggan dan tujuan transfer, lalu transfer manual dari luar sistem.
+4. Admin punya tombol **Menunggu/Proses** dan **Accept**. Setelah admin selesai transfer, admin menekan **Accept**. Admin juga punya tombol **Tolak** (dengan alasan).
+5. Status: `menunggu`, `diproses`, `berhasil`, `ditolak`. Pelanggan melihat status di halaman Penarikan Dana dan riwayat.
+
+**Keamanan saldo (WAJIB, ini yang paling sering bocor):**
+- Saat pelanggan mengajukan, dalam **satu transaksi database**: kunci baris dompet (`SELECT ... FOR UPDATE`), cek saldo utama, **kurangi saldo utama langsung (saldo ditahan)**, lalu buat data penarikan berstatus `menunggu`.
+- Skenario yang harus gagal: saldo utama Rp25.000, ajukan Rp25.000, lalu ajukan Rp25.000 lagi, **permintaan kedua harus ditolak** karena saldo tinggal Rp0. Termasuk jika dua permintaan dikirim **bersamaan** (race condition): hanya satu yang boleh berhasil.
+- Jika admin **menolak**, saldo dikembalikan ke saldo utama **tepat satu kali**.
+- Perubahan status hanya boleh mengikuti alur yang valid (misal `berhasil` atau `ditolak` tidak bisa diubah lagi). Cegah double-click dengan guard status di backend dan tombol nonaktif di frontend.
+- Catat semua aksi di Log Sistem (siapa, kapan, nominal, status sebelum dan sesudah). Admin boleh melampirkan catatan atau bukti transfer.
+
+---
+
+## 8. REFERRAL
+
+- Setiap pelanggan punya kode dan tautan referral. Pendaftar baru dengan kode terhubung ke pengundang (`referred_by`), tidak bisa mengundang diri sendiri.
+- Setiap pesan berhasil dari pelanggan yang direferensikan menghasilkan bonus Rp60 ke **saldo utama** pengundang.
+- Tidak ada potongan dari penghasilan pelanggan yang direferensikan.
+- Riwayat bonus dan statistik referral (jumlah downline, total bonus) tersedia.
+- Bonus tidak boleh tercatat ganda (unique constraint per pesan).
+
+---
+
+## 9. HALAMAN HASIL
+
+Fitur wajib (admin melihat semua pelanggan dengan filter pelanggan, pelanggan hanya miliknya):
+1. **Filter status:** `Semua`, `Berhasil`, `Gagal`, `Pending`, `Belum Dikirim`.
+2. **Pencarian nomor tujuan** (debounce, partial match).
+3. **Ringkasan:** total kontak diproses dan **persentase keberhasilan** (berhasil / diproses x 100%), plus jumlah per status.
+4. **Unduh laporan Excel (.xlsx) dan CSV** mengikuti filter dan pencarian aktif. Kolom: nomor tujuan, campaign, status, alasan gagal, WA pengirim, waktu kirim.
+5. **Riwayat hasil per campaign** (ringkasan per campaign, klik untuk detail per nomor).
+6. Pagination server-side, sort berdasarkan waktu.
+
+Definisi status: **Berhasil** = terkirim; **Gagal** = error atau nomor tidak valid (tampilkan alasan); **Pending** = sedang diproses; **Belum Dikirim** = belum pernah diproses.
+
+---
+
+## 10. SKEMA DATABASE (MINIMAL)
+
+- `users` (id, name, email, password_hash, role, referral_code, referred_by, status, created_at)
+- `wa_sessions` (id, user_id, phone, label, status, auth_path, last_activity_at, last_connected_at)
+- `campaigns` (id, title, message_text, image_url, caption, cta_text, cta_url, is_active, status, created_at)
+- `contacts` (id, campaign_id, phone, status [belum_dikirim|pending|berhasil|gagal], wa_session_id, wa_message_id, locked_at, error_reason, sent_at) + unique `(campaign_id, phone)`
+- `blast_jobs` (id, user_id, campaign_id, delay_seconds, status, total, sent, failed, pending, running_balance, settled_at, started_at, finished_at)
+- `blast_job_sessions` (id, blast_job_id, wa_session_id, sent, failed)
+- `wallets` (user_id, balance_main, balance_running)
+- `transactions` (id, user_id, type [earning|referral|withdraw|withdraw_refund|adjustment], amount, ref_contact_id, ref_job_id, ref_withdrawal_id, created_at) + unique constraint untuk mencegah catatan ganda per pesan
+- `withdrawals` (id, user_id, amount, account_name, bank_name, account_number, status, admin_note, proof_url, created_at, processed_by, processed_at)
+- `activity_logs` (id, actor_id, action, detail jsonb, ip, created_at)
+- `settings` (key, value)
+
+Index: `contacts(campaign_id, status)`, `contacts(wa_session_id)`, `transactions(user_id, created_at)`.
+
+---
+
+## 11. PENGUJIAN WAJIB SEBELUM SERAH TERIMA
+
+Buat dan jalankan pengujian (otomatis jika bisa), lalu laporkan hasilnya:
+1. **Penarikan:** saldo 25rb, tarik 25rb, tarik lagi 25rb (harus ditolak). Dua permintaan bersamaan (hanya satu berhasil). Tarik di bawah 15rb (ditolak). Tolak oleh admin (saldo kembali satu kali). Accept (status berhasil, tidak bisa diubah lagi).
+2. **Multi-session:** 2 WA satu pelanggan, pastikan WA 2 benar-benar yang mengirim (cek `wa_session_id` dan nomor pengirim). 5 pelanggan blast bersamaan dengan 200 kontak, pastikan **tidak ada nomor terkirim dua kali** dan pembagian merata.
+3. **Saldo:** saldo berjalan naik Rp1.100 per pesan berhasil, pindah ke saldo utama sekali saat selesai/berhenti/tidak bisa kirim, pesan gagal tidak menambah saldo.
+4. **Referral:** Rp60 per pesan berhasil masuk saldo utama pengundang, tidak ganda, tidak memotong penghasilan downline.
+5. **Sesi idle 10 menit** melepas resource dan memicu pairing ulang.
+6. **Hak akses:** pelanggan tidak bisa mengakses endpoint admin, tidak bisa melihat kontak atau mengedit pesan.
+7. **Halaman Hasil:** semua filter, pencarian, ringkasan persen, export xlsx/csv, riwayat per campaign.
+8. Responsif di HP dan laptop.
+
+---
+
+## 12. KEAMANAN, BACKUP, DAN LOGGING
+
+- Validasi input (zod), sanitasi upload gambar (tipe dan ukuran), rate limiting, helmet, CORS terbatas.
+- Logging dan penanganan error yang rapi (tidak membocorkan stack trace ke klien). Semua aksi penting masuk `activity_logs`.
+- Sediakan skrip backup untuk: kode, database (pg_dump), konfigurasi (.env), dan data sesi WhatsApp yang diperlukan. Jelaskan cara restore di README.
+- Seed: 1 admin, 1 pelanggan contoh, 1 campaign dengan 200 kontak dummy.
+
+---
+
+## 13. DESAIN UI (WAJIB DIIKUTI)
+
+**Arah desain:** dark mode, clean, modern, elegant. Terasa seperti produk SaaS profesional (rasa: Linear, Vercel, Stripe Dashboard), **bukan** template generik buatan AI.
+
+**Warna (CSS variables / Tailwind tokens):**
+- Background utama `#0B0D10` (bukan hitam murni), surface `#12151A`, surface terangkat `#181C22`, border `#232830` (garis 1px sebagai pemisah utama, bukan bayangan).
+- Teks utama `#E6E8EB`, sekunder `#8A919C`, redup `#5C6370`.
+- **Satu warna aksen:** hijau halus `#3DD68C` untuk tombol utama, link aktif, fokus.
+- Status konsisten: Berhasil `#3DD68C`, Gagal `#F26D6D`, Pending `#E5B454`, Belum Dikirim `#8A919C`. Badge memakai latar transparan tipis (12% opacity) dengan teks warna penuh.
+
+**Tipografi:** Inter (atau Geist). Angka uang dan statistik pakai `tabular-nums`. Nomor telepon dan ID pakai font mono. Format uang `Rp1.100` (`Intl.NumberFormat('id-ID')`). Hierarki jelas: judul halaman 20-24px, isi 14px, label 12-13px.
+
+**Layout dan komponen:** sidebar kiri tetap (collapsible di mobile) + topbar tipis, grid 8px. Radius 8-10px. Tabel padat dan rapi (header sticky, hover halus, pagination). Kartu statistik sederhana (label kecil, angka besar). Progress blast berupa bar tipis dengan angka dan ringkasan per WA. Ikon hanya **Lucide**, ukuran seragam, **tanpa emoji sebagai ikon**. Form dengan label di atas input dan ring fokus hijau tipis. Wajib: skeleton loading, empty state informatif, toast kecil, konfirmasi untuk aksi berbahaya (hentikan blast, hapus campaign, tolak/accept penarikan). Animasi minimal 150-200ms.
+
+**DILARANG (ciri "AI slop"):** gradien ungu-biru, gradien pada teks, efek neon/glow, glassmorphism berlebihan, blob dekoratif, kartu bertumpuk dengan bayangan besar, sudut terlalu bulat, ikon warna-warni di tiap kartu, hero section generik, ilustrasi stok, copywriting klise ("Powerful", "Seamless", "Unlock"), banyak warna aksen, kontras rendah.
+
+**Login/daftar:** satu kartu terpusat di latar gelap, logo teks kecil, tanpa ilustrasi besar.
+
+**Responsif dan aksesibilitas:** nyaman di HP (target sentuh min 40px), kontras memenuhi WCAG AA.
+
+---
+
+## 14. HASIL YANG DIMINTA
+
+1. Struktur folder `client/` dan `server/`.
+2. Backend lengkap (routes, controllers, services, Baileys session manager, blast worker, wallet service).
+3. Frontend lengkap (halaman admin dan pelanggan).
+4. Migration dan seed database.
+5. Skrip backup dan restore.
+6. Laporan hasil audit/pengujian (bagian 0 dan 11).
+7. README: instalasi, menjalankan frontend (3000) dan backend (5000), cara pairing WA, rencana deploy ke boleblast.my.id.
