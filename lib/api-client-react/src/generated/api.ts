@@ -1810,9 +1810,9 @@ export const getCancelBlastUrl = () => {
 /**
  * @summary Cancel the current blast
  */
-export const cancelBlast = async ( options?: Parameters<typeof customFetch>[1]): Promise<BlastJob> => {
+export const cancelBlast = async ( options?: Parameters<typeof customFetch>[1]): Promise<ActionResult> => {
 
-  return customFetch<BlastJob>(getCancelBlastUrl(),
+  return customFetch<ActionResult>(getCancelBlastUrl(),
   {
     ...options,
     method: 'POST'

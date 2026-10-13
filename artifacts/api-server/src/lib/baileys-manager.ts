@@ -159,6 +159,17 @@ async function startSocket(
   userId: string,
   options?: { method?: "qr" | "pairing_code"; phone?: string },
 ): Promise<LiveSession> {
+  const pairingPhone =
+    options?.method === "pairing_code"
+      ? normalizePhone(options.phone ?? "")
+      : undefined;
+  if (
+    options?.method === "pairing_code" &&
+    (!pairingPhone || pairingPhone.length < 8)
+  ) {
+    throw new Error("Nomor WhatsApp untuk pairing code tidak valid.");
+  }
+
   const dir = sessionPath(sessionId);
   await mkdir(dir, { recursive: true });
   const { state, saveCreds } = await useMultiFileAuthState(dir);
@@ -177,20 +188,65 @@ async function startSocket(
   liveSessions.set(sessionId, live);
   await updateSession(sessionId, userId, "connecting");
 
+  let finishAuthSetup!: () => void;
+  let authSetupFinished = false;
+  let authSetupError: Error | null = null;
+  let pairingCodeRequested = false;
+  const authSetupReady = new Promise<void>((resolve) => {
+    finishAuthSetup = () => {
+      if (authSetupFinished) return;
+      authSetupFinished = true;
+      clearTimeout(authSetupTimeout);
+      resolve();
+    };
+  });
+  const authSetupTimeout = setTimeout(finishAuthSetup, 12_000);
+  authSetupTimeout.unref();
+
   socket.ev.on("creds.update", saveCreds);
   socket.ev.on("connection.update", async (update) => {
     if (update.qr) {
-      live.qrDataUrl = await QRCode.toDataURL(update.qr, {
-        width: 256,
-        margin: 2,
-        color: { dark: "#111827", light: "#FFFFFF" },
-      });
-      publish(userId, "wa:qr", { sessionId, qrDataUrl: live.qrDataUrl });
+      if (options?.method === "pairing_code") {
+        if (state.creds.registered) {
+          finishAuthSetup();
+        } else if (!pairingCodeRequested) {
+          pairingCodeRequested = true;
+          try {
+            live.pairingCode = await socket.requestPairingCode(pairingPhone!);
+            publish(userId, "wa:pairing-code", {
+              sessionId,
+              pairingCode: live.pairingCode,
+            });
+          } catch (error) {
+            authSetupError =
+              error instanceof Error
+                ? error
+                : new Error("Gagal membuat kode pairing WhatsApp.");
+          } finally {
+            finishAuthSetup();
+          }
+        }
+      } else {
+        try {
+          live.qrDataUrl = await QRCode.toDataURL(update.qr, {
+            width: 256,
+            margin: 2,
+            color: { dark: "#111827", light: "#FFFFFF" },
+          });
+          publish(userId, "wa:qr", {
+            sessionId,
+            qrDataUrl: live.qrDataUrl,
+          });
+        } finally {
+          finishAuthSetup();
+        }
+      }
     }
     if (update.connection === "open") {
       live.qrDataUrl = null;
       const phone = socket.user?.id.split(":")[0]?.split("@")[0] ?? null;
       await updateSession(sessionId, userId, "online", phone);
+      finishAuthSetup();
       return;
     }
     if (update.connection !== "close") return;
@@ -198,8 +254,9 @@ async function startSocket(
     const statusCode = statusFromDisconnect(update.lastDisconnect?.error);
     const loggedOut = statusCode === DisconnectReason.loggedOut;
     await updateSession(sessionId, userId, loggedOut ? "logged_out" : "offline");
+    finishAuthSetup();
     if (liveSessions.get(sessionId) !== live || loggedOut) {
-      liveSessions.delete(sessionId);
+      if (liveSessions.get(sessionId) === live) liveSessions.delete(sessionId);
       return;
     }
 
@@ -219,18 +276,11 @@ async function startSocket(
     }
   });
 
-  if (options?.method === "pairing_code") {
-    const phone = normalizePhone(options.phone ?? "");
-    if (phone.length < 8) {
-      socket.end(new Error("A valid phone number is required for a pairing code."));
-      liveSessions.delete(sessionId);
-      throw new Error("Nomor WhatsApp untuk pairing code tidak valid.");
-    }
-    live.pairingCode = await socket.requestPairingCode(phone);
-    publish(userId, "wa:pairing-code", {
-      sessionId,
-      pairingCode: live.pairingCode,
-    });
+  await authSetupReady;
+  if (authSetupError) {
+    if (liveSessions.get(sessionId) === live) liveSessions.delete(sessionId);
+    socket.end(authSetupError);
+    throw authSetupError;
   }
 
   return live;
@@ -242,6 +292,10 @@ export async function connectWaSession(
   method: "qr" | "pairing_code",
   phone?: string,
 ) {
+  if (method === "pairing_code" && normalizePhone(phone ?? "").length < 8) {
+    throw new Error("Nomor WhatsApp untuk pairing code tidak valid.");
+  }
+
   const [session] = await db
     .select()
     .from(waSessionsTable)

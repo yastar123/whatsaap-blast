@@ -474,15 +474,8 @@ export const StartBlastResponse = zod.object({
  * @summary Cancel the current blast
  */
 export const CancelBlastResponse = zod.object({
-  "id": zod.string(),
-  "campaignId": zod.string(),
-  "status": zod.enum(['running', 'cancelled', 'completed', 'failed']),
-  "total": zod.number().int(),
-  "sent": zod.number().int(),
-  "failed": zod.number().int(),
-  "pending": zod.number().int(),
-  "startedAt": zod.coerce.date(),
-  "finishedAt": zod.coerce.date().nullable()
+  "success": zod.boolean(),
+  "message": zod.string()
 })
 
 

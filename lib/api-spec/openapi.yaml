@@ -381,7 +381,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BlastJob"
+                  $ref: "#/components/schemas/BlastJob"
   /blast/cancel:
     post:
       operationId: cancelBlast
@@ -393,7 +393,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BlastJob"
+                $ref: "#/components/schemas/ActionResult"
   /blast/current:
     get:
       operationId: getCurrentBlast
