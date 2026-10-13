@@ -961,11 +961,10 @@ td { color: #b3bac3; border-color: #232830; }
 /* Split-screen authentication: product story on the left, form on the right. */
 .auth-layout { min-height: 100dvh; display: grid; grid-template-columns: minmax(390px,.92fr) minmax(480px,1.08fr); padding: 0; background: #0b0d10; }
 .auth-aside { display: flex; min-height: 100dvh; background: #101913; border-right: 1px solid #26372e; }
-.auth-main { min-height: 100dvh; width: auto; display: grid; place-items: center; padding: 44px 48px 78px; }
-.auth-form-wrap { width: 100%; max-width: none; padding: 34px; background: #12151a; border: 1px solid #232830; border-radius: 12px; box-shadow: 0 24px 70px rgba(0,0,0,.28); }
+.auth-main { min-height: 100dvh; width: auto; display: flex; flex-direction: column; align-items: stretch; justify-content: center; padding: 44px 48px 78px; }
 .mobile-brand { display: none; }
 .auth-eyebrow { color: #8a919c; }
-.auth-form-wrap h1 { color: #e6e8eb; }
+.auth-main > h1 { font: 800 27px var(--app-font-serif); letter-spacing: -1px; color: #e6e8eb; margin: 0 0 7px; }
 .auth-subtitle,.auth-switch { color: #8a919c; }
 .auth-switch a { color: #3dd68c; }
 .auth-trust { color: #858d98; }
@@ -983,7 +982,6 @@ td { color: #b3bac3; border-color: #232830; }
   .auth-aside-copy { padding-left: 0; padding-right: 0; }
   .auth-aside-copy h2 { font-size: 28px; }
   .auth-main { padding-left: 24px; padding-right: 24px; }
-  .auth-form-wrap { padding: 28px 24px; }
   .auth-bottom { left: 24px; right: 24px; }
   .mobile-brand { display: none; }
 }
@@ -1006,7 +1004,6 @@ td { color: #b3bac3; border-color: #232830; }
   .auth-aside-copy p { font-size: 9px; line-height: 1.45; margin: 0; }
   .aside-foot { display: none; }
   .auth-main { min-height: 0; width: 100%; padding: 28px 20px 66px; }
-  .auth-form-wrap { width: 100%; max-width: none; padding: 25px 21px; }
   .mobile-brand { display: none; }
   .auth-bottom { bottom: 17px; left: 20px; right: 20px; }
 }
@@ -1016,5 +1013,5 @@ td { color: #b3bac3; border-color: #232830; }
   .auth-aside-copy { max-width: 62%; }
   .auth-aside-copy h2 { font-size: 20px; }
   .auth-illustration { right: 4%; transform: translateY(-50%) scale(.9); }
-  .auth-form-wrap { padding: 23px 18px; }
+  .auth-main { padding-left: 18px; padding-right: 18px; }
 }
