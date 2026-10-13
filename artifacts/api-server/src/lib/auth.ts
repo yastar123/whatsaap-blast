@@ -155,3 +155,15 @@ export function requireAdmin(
   }
   next();
 }
+
+export function requireCustomer(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  if (req.auth?.role !== "customer") {
+    res.status(403).json({ error: "Akses khusus customer." });
+    return;
+  }
+  next();
+}

@@ -72,7 +72,14 @@ function Shell() {
   if (isLoading) return <div className="loading-screen"><div className="skeleton brand-skeleton" /><div className="skeleton line-skeleton" /><div className="skeleton content-skeleton" /></div>;
   if (isError || !user) return <AuthPage mode="login" />;
   const currentTitle = titles[path] || ['Halaman tidak ditemukan', ''];
-  const shownGroups = navGroups.map(group => ({ ...group, links: group.links.filter(link => user.role === 'admin' || !['/campaigns', '/contacts', '/customers', '/admin/sessions', '/settings'].includes(link.href)) })).filter(group => group.links.length);
+  const adminOnlyPaths = ['/campaigns', '/contacts', '/customers', '/admin/sessions', '/settings'];
+  const customerOnlyPaths = ['/whatsapp', '/blast', '/wallet', '/referrals'];
+  const shownGroups = navGroups.map(group => ({
+    ...group,
+    links: group.links.filter(link => user.role === 'admin'
+      ? !customerOnlyPaths.includes(link.href)
+      : !adminOnlyPaths.includes(link.href)),
+  })).filter(group => group.links.length);
   return <div className="app-shell">
     <aside className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
       <Link href="/" className="brand-lockup"><span className="brand-mark"><MessageCircle size={19} /></span><span><b>titip<span>kirim</span></b><small>OPERATIONS DESK</small></span></Link>
@@ -88,9 +95,11 @@ function Shell() {
       <div className="page-wrap"><div className="page-heading"><div><div className="eyebrow">{user.role === 'admin' ? 'PANEL ADMINISTRATOR' : 'PORTAL PENGIRIM'}</div><h1>{currentTitle[0]}</h1><p>{currentTitle[1]}</p></div><div className="page-date"><span className="date-dot" /> {new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())}</div></div>
         <ErrorBoundary resetKey={path}><Switch>
           <Route path="/"><DashboardPage user={user} /></Route>
-          <Route path="/whatsapp"><WhatsAppPage /></Route><Route path="/blast"><BlastPage role={user.role} /></Route>
+          <Route path="/whatsapp">{user.role === 'customer' ? <WhatsAppPage /> : <Forbidden />}</Route>
+          <Route path="/blast">{user.role === 'customer' ? <BlastPage role={user.role} /> : <Forbidden />}</Route>
           <Route path="/results"><ResultsPage role={user.role} userId={user.id} /></Route>
-          <Route path="/wallet"><WalletPage /></Route><Route path="/referrals"><ReferralsPage /></Route>
+          <Route path="/wallet">{user.role === 'customer' ? <WalletPage /> : <Forbidden />}</Route>
+          <Route path="/referrals">{user.role === 'customer' ? <ReferralsPage /> : <Forbidden />}</Route>
           <Route path="/withdrawals"><WithdrawalsPage role={user.role} /></Route>
           <Route path="/campaigns">{user.role === 'admin' ? <CampaignsPage /> : <Forbidden />}</Route>
           <Route path="/contacts">{user.role === 'admin' ? <ContactsPage /> : <Forbidden />}</Route>

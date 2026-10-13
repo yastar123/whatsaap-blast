@@ -18,7 +18,7 @@ import {
   withdrawalsTable,
 } from "@workspace/db";
 import { getAppSettings } from "../lib/app-settings";
-import { requireAdmin, requireAuth } from "../lib/auth";
+import { requireAdmin, requireAuth, requireCustomer } from "../lib/auth";
 import {
   decryptPrivateValue,
   encryptPrivateValue,
@@ -184,7 +184,7 @@ router.get("/withdrawals", async (req, res): Promise<void> => {
   );
 });
 
-router.post("/withdrawals", async (req, res): Promise<void> => {
+router.post("/withdrawals", requireCustomer, async (req, res): Promise<void> => {
   const parsed = RequestWithdrawalBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

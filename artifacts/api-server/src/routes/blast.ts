@@ -7,7 +7,7 @@ import {
   StartBlastResponse,
 } from "@workspace/api-zod";
 import { db, blastJobsTable } from "@workspace/db";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requireCustomer } from "../lib/auth";
 import {
   cancelCurrentBlast,
   getBlastJobProgress,
@@ -15,7 +15,7 @@ import {
 } from "../lib/blast-worker";
 
 const router: IRouter = Router();
-router.use(requireAuth);
+router.use(requireAuth, requireCustomer);
 
 router.post("/blast/start", async (req, res): Promise<void> => {
   const parsed = StartBlastBody.safeParse(req.body);

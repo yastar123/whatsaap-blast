@@ -11,14 +11,14 @@ import {
   ListWaSessionsResponse,
 } from "@workspace/api-zod";
 import { db, waSessionsTable } from "@workspace/db";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requireCustomer } from "../lib/auth";
 import {
   connectWaSession,
   disconnectWaSession,
 } from "../lib/baileys-manager";
 
 const router: IRouter = Router();
-router.use(requireAuth);
+router.use(requireAuth, requireCustomer);
 
 function toSessionDto(session: typeof waSessionsTable.$inferSelect) {
   return {
