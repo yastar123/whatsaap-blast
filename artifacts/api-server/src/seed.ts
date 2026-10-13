@@ -18,7 +18,7 @@ const demoPassword = process.env["SEED_DEMO_PASSWORD"] ?? "DemoOnly2026!";
 const passwordHash = await bcrypt.hash(demoPassword, 12);
 const settings = [
   ["perMessage", 1100],
-  ["referralBonus", 50],
+  ["referralBonus", 60],
   ["minimumWithdrawal", 15000],
   ["pendingReleaseHours", 24],
   ["maxMessagesPerSessionPerHour", 30],

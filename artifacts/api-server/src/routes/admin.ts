@@ -246,7 +246,10 @@ router.get("/admin/contacts", async (req, res): Promise<void> => {
             .where(eq(waSessionsTable.id, contact.waSessionId))
             .limit(1)
         : [];
-      return { ...contact, senderPhone: session?.phone ?? null };
+      return {
+        ...contact,
+        senderPhone: contact.waSenderPhone ?? session?.phone ?? null,
+      };
     }),
   );
   res.json(

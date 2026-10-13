@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import ExcelJS from "exceljs";
-import { and, count, desc, eq, ilike, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, ilike, sql, type SQL } from "drizzle-orm";
 import {
   ExportResultsQueryParams,
   GetResultsSummaryQueryParams,
@@ -68,7 +68,7 @@ async function queryRows(
       customerName: usersTable.name,
       status: contactsTable.status,
       errorReason: contactsTable.errorReason,
-      senderPhone: waSessionsTable.phone,
+      senderPhone: sql<string | null>`COALESCE(${contactsTable.waSenderPhone}, ${waSessionsTable.phone})`,
       sentAt: contactsTable.sentAt,
     })
     .from(contactsTable)

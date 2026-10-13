@@ -19,6 +19,7 @@
 
 export * from "./activity";
 export * from "./blast-jobs";
+export * from "./blast-job-sessions";
 export * from "./campaigns";
 export * from "./contacts";
 export * from "./refresh-tokens";

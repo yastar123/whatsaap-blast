@@ -1720,7 +1720,7 @@ export const getStartBlastUrl = () => {
 }
 
 /**
- * @summary Start the active campaign for the selected WhatsApp session
+ * @summary Start the active campaign using all online WhatsApp sessions
  */
 export const startBlast = async (blastStartInput: BlastStartInput, options?: Parameters<typeof customFetch>[1]): Promise<BlastJob> => {
 
@@ -1786,7 +1786,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type StartBlastMutationVariables = {data: BodyType<BlastStartInput>}
 
     /**
- * @summary Start the active campaign for the selected WhatsApp session
+ * @summary Start the active campaign using all online WhatsApp sessions
  */
 export const useStartBlast = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startBlast>>, TError,StartBlastMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}

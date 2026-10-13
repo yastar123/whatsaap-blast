@@ -5,12 +5,15 @@ Dashboard pengelolaan kampanye WhatsApp dengan role admin/customer, sesi Baileys
 ## Run & Operate
 
 - Start the managed workflows `artifacts/wa-campaign: web` and `artifacts/api-server: API Server`. The preview routes the web app at `/` and the API at `/api`; Replit supplies each service's `PORT`.
-- First-time database setup: `pnpm --filter @workspace/db run push`, then `pnpm --filter @workspace/api-server run seed`.
+- First-time database setup: `pnpm run db:push:backup`, then `pnpm --filter @workspace/api-server run seed`. The wrapper backs up PostgreSQL before applying schema changes.
+- Blast startup uses every online WhatsApp session owned by the customer. Each blast's earnings are held in its running balance and moved to the main balance once the job finishes or is cancelled; referrals credit the referrer's main balance immediately.
+- Withdrawal requests reserve the main balance transactionally. Admin review follows `pending → approved → paid` or `pending/approved → rejected`; rejection refunds once and requires a reason.
 - `pnpm run typecheck` — typecheck all workspace packages.
 - `pnpm --filter @workspace/api-server run dev` — build and run the API (requires `PORT`, `DATABASE_URL`, and `SESSION_SECRET`).
 - `pnpm --filter @workspace/wa-campaign run dev` — run Vite (requires `PORT` and `BASE_PATH`).
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate typed API clients after editing `lib/api-spec/openapi.yaml`.
 - Development demo accounts: `admin@demo.local` and `customer@demo.local`; the seed's default password is `DemoOnly2026!`. Do not use these credentials outside local development.
+- `pnpm run db:backup` writes a custom-format PostgreSQL dump to `generated-artifacts/database-backups/`; that directory is excluded from Git and deployment packaging.
 
 ## Stack
 

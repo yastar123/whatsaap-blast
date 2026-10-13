@@ -20,6 +20,7 @@ export const usersTable = pgTable(
     status: text("status").notNull().default("active"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     mainBalance: integer("main_balance").notNull().default(0),
+    runningBalance: integer("running_balance").notNull().default(0),
     pendingBalance: integer("pending_balance").notNull().default(0),
   },
   (table) => [

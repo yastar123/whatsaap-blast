@@ -12,7 +12,7 @@ export type AppSettings = {
 
 export const defaultSettings: AppSettings = {
   perMessage: 1100,
-  referralBonus: 50,
+  referralBonus: 60,
   minimumWithdrawal: 15000,
   pendingReleaseHours: 24,
   maxMessagesPerSessionPerHour: 30,

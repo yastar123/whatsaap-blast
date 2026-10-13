@@ -11,6 +11,7 @@ export type TransactionStatus = typeof TransactionStatus[keyof typeof Transactio
 
 export const TransactionStatus = {
   pending: 'pending',
+  running: 'running',
   main: 'main',
   completed: 'completed',
   rejected: 'rejected',

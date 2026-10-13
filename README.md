@@ -15,7 +15,7 @@ Dashboard berbahasa Indonesia untuk mengelola kampanye WhatsApp, sesi pengirim, 
 ## Menjalankan di Replit
 
 1. Jalankan `pnpm install --frozen-lockfile`.
-2. Siapkan skema development dengan `pnpm --filter @workspace/db run push`.
+2. Siapkan skema development dengan `pnpm run db:push:backup` (membuat backup sebelum mengubah skema).
 3. Buat akun demo dan 300 placeholder dengan `pnpm --filter @workspace/api-server run seed`.
 4. Jalankan workflow `artifacts/api-server: API Server` dan `artifacts/wa-campaign: web`.
 5. Buka preview web di `/`. Endpoint API dan Socket.IO tersedia melalui `/api`.
@@ -26,14 +26,14 @@ Replit mengatur port lokal setiap artifact secara otomatis dan meneruskan trafik
 
 Replit menyediakan `DATABASE_URL` secara otomatis. `SESSION_SECRET` harus tersedia sebagai Replit Secret. Jangan commit `.env` atau isi folder `.wa-sessions`.
 
-Untuk lingkungan lokal, salin `.env.example` ke `.env`, sesuaikan PostgreSQL dan rahasia lokal, lalu ekspor nilainya:
+Untuk lingkungan lokal, salin `.env.example` ke `.env`, sesuaikan PostgreSQL dan rahasia lokal, lalu ekspor nilainya. Gunakan `pnpm run db:push:backup` sebelum perubahan skema; backup PostgreSQL tersimpan di `generated-artifacts/database-backups/`, yang diabaikan Git dan deployment:
 
 ```sh
 cp .env.example .env
 set -a
 . ./.env
 set +a
-pnpm --filter @workspace/db run push
+pnpm run db:push:backup
 pnpm --filter @workspace/api-server run seed
 ```
 
@@ -44,10 +44,10 @@ Skema saat ini dikelola dengan Drizzle dan `drizzle-kit push` untuk database dev
 ## Menghubungkan WhatsApp
 
 1. Daftar atau masuk sebagai customer.
-2. Buka **WhatsApp**, tambah sesi, lalu pilih QR atau pairing code.
+2. Buka **WhatsApp**, tambah satu atau lebih sesi, lalu tautkan masing-masing dengan QR atau pairing code.
 3. Tautkan perangkat dari WhatsApp pada ponsel pemilik nomor.
 4. Admin harus membuat dan mengaktifkan kampanye serta mengimpor kontak yang telah memberi persetujuan.
-5. Customer memilih sesi online, memilih jeda, lalu mulai blast. Status, QR, dan progres diperbarui melalui Socket.IO.
+5. Customer menghubungkan satu atau lebih sesi online, memilih jeda, lalu mulai blast. Semua sesi online menjadi pekerja paralel; status, QR, dan progres diperbarui melalui Socket.IO.
 
 Jangan kirim ke nomor yang tidak memberi persetujuan. Hentikan pengiriman bila penerima meminta berhenti.
 
@@ -55,7 +55,8 @@ Jangan kirim ke nomor yang tidak memberi persetujuan. Hentikan pengiriman bila p
 
 ```sh
 pnpm run typecheck
-pnpm --filter @workspace/db run push
+pnpm run db:push:backup
+pnpm run db:backup
 pnpm --filter @workspace/api-server run seed
 pnpm --filter @workspace/api-spec run codegen
 ```

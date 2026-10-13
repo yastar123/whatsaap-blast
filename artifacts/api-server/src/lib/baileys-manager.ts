@@ -350,12 +350,20 @@ export async function disconnectWaSession(
 export async function sendWhatsAppMessage(
   sessionId: string,
   userId: string,
-  phone: string,
+  expectedSessionPhone: string,
+  recipientPhone: string,
   content: { text: string; imageUrl?: string | null; ctaUrl?: string | null },
 ) {
   const socket = getLiveSocket(sessionId, userId);
   if (!socket || !socket.user) throw new Error("WhatsApp session is offline.");
-  const number = normalizePhone(phone);
+  const actualSender = normalizePhone(
+    socket.user.id.split(":")[0]?.split("@")[0] ?? "",
+  );
+  const expectedSender = normalizePhone(expectedSessionPhone);
+  if (!expectedSender || actualSender !== expectedSender) {
+    throw new Error("Nomor WhatsApp aktif tidak cocok dengan sesi yang ditugaskan.");
+  }
+  const number = normalizePhone(recipientPhone);
   if (number.length < 8) throw new Error("Nomor penerima tidak valid.");
   const text =
     content.text +

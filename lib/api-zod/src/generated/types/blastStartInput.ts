@@ -8,6 +8,5 @@
 import type { BlastStartInputDelaySeconds } from './blastStartInputDelaySeconds';
 
 export interface BlastStartInput {
-  sessionId: string;
   delaySeconds: BlastStartInputDelaySeconds;
 }

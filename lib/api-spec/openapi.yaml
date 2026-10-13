@@ -368,7 +368,7 @@ paths:
     post:
       operationId: startBlast
       tags: [blast]
-      summary: Start the active campaign for the selected WhatsApp session
+      summary: Start the active campaign using all online WhatsApp sessions
       requestBody:
         required: true
         content:
@@ -726,11 +726,12 @@ components:
         sentByMe: { type: integer }
         failedByMe: { type: integer }
         pendingBalance: { type: integer }
+        runningBalance: { type: integer }
         mainBalance: { type: integer }
         recentActivity:
           type: array
           items: { $ref: "#/components/schemas/ActivityItem" }
-      required: [role, totalCustomers, onlineSessions, sentTotal, paidTotal, sentByMe, failedByMe, pendingBalance, mainBalance, recentActivity]
+      required: [role, totalCustomers, onlineSessions, sentTotal, paidTotal, sentByMe, failedByMe, pendingBalance, runningBalance, mainBalance, recentActivity]
     ActivityItem:
       type: object
       properties:
@@ -860,9 +861,17 @@ components:
     BlastStartInput:
       type: object
       properties:
-        sessionId: { type: string }
         delaySeconds: { type: integer, enum: [1, 5, 15, 30] }
-      required: [sessionId, delaySeconds]
+      required: [delaySeconds]
+    BlastJobSession:
+      type: object
+      properties:
+        waSessionId: { type: string }
+        phone: { type: ["string", "null"] }
+        status: { type: string }
+        sent: { type: integer }
+        failed: { type: integer }
+      required: [waSessionId, phone, status, sent, failed]
     BlastJob:
       type: object
       properties:
@@ -873,9 +882,13 @@ components:
         sent: { type: integer }
         failed: { type: integer }
         pending: { type: integer }
+        runningBalance: { type: integer }
+        sessions:
+          type: array
+          items: { $ref: "#/components/schemas/BlastJobSession" }
         startedAt: { type: string, format: date-time }
         finishedAt: { type: ["string", "null"], format: date-time }
-      required: [id, campaignId, status, total, sent, failed, pending, startedAt, finishedAt]
+      required: [id, campaignId, status, total, sent, failed, pending, runningBalance, sessions, startedAt, finishedAt]
     CurrentBlastResponse:
       type: object
       properties:
@@ -930,6 +943,7 @@ components:
       properties:
         mainBalance: { type: integer }
         pendingBalance: { type: integer }
+        runningBalance: { type: integer }
         lifetimeEarnings: { type: integer }
         referralEarnings: { type: integer }
         perMessage: { type: integer }
@@ -937,14 +951,14 @@ components:
         transactions:
           type: array
           items: { $ref: "#/components/schemas/Transaction" }
-      required: [mainBalance, pendingBalance, lifetimeEarnings, referralEarnings, perMessage, minimumWithdrawal, transactions]
+      required: [mainBalance, pendingBalance, runningBalance, lifetimeEarnings, referralEarnings, perMessage, minimumWithdrawal, transactions]
     Transaction:
       type: object
       properties:
         id: { type: string }
-        type: { type: string, enum: [earning, referral, withdrawal] }
+        type: { type: string, enum: [earning, referral, withdrawal, withdraw_refund] }
         amount: { type: integer }
-        status: { type: string, enum: [pending, main, completed, rejected] }
+        status: { type: string, enum: [pending, running, main, completed, rejected] }
         description: { type: string }
         createdAt: { type: string, format: date-time }
       required: [id, type, amount, status, description, createdAt]

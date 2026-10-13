@@ -12,6 +12,7 @@ export * from './activityItem';
 export * from './appSettings';
 export * from './authResponse';
 export * from './blastJob';
+export * from './blastJobSession';
 export * from './blastJobStatus';
 export * from './blastStartInput';
 export * from './blastStartInputDelaySeconds';

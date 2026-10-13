@@ -5,6 +5,7 @@
  * Consent-based WhatsApp campaign dashboard API
  * OpenAPI spec version: 0.1.0
  */
+import type { BlastJobSession } from './blastJobSession';
 import type { BlastJobStatus } from './blastJobStatus';
 
 export interface BlastJob {
@@ -15,6 +16,8 @@ export interface BlastJob {
   sent: number;
   failed: number;
   pending: number;
+  runningBalance: number;
+  sessions: BlastJobSession[];
   startedAt: Date;
   /** @nullable */
   finishedAt: Date | null;

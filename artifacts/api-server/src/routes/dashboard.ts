@@ -166,6 +166,7 @@ router.get("/dashboard/overview", async (req, res): Promise<void> => {
       sentByMe: sentByMe[0]?.value ?? 0,
       failedByMe: failedByMe[0]?.value ?? 0,
       pendingBalance: customer?.pendingBalance ?? 0,
+      runningBalance: customer?.runningBalance ?? 0,
       mainBalance: customer?.mainBalance ?? 0,
       recentActivity: recentActivity.map((event) => ({
         id: event.id,

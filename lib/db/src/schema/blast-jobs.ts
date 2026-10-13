@@ -13,6 +13,8 @@ export const blastJobsTable = pgTable(
     sent: integer("sent").notNull().default(0),
     failed: integer("failed").notNull().default(0),
     pending: integer("pending").notNull().default(0),
+    runningBalance: integer("running_balance").notNull().default(0),
+    settledAt: timestamp("settled_at", { withTimezone: true }),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),

@@ -145,6 +145,7 @@ export const GetDashboardOverviewResponse = zod.object({
   "sentByMe": zod.number().int(),
   "failedByMe": zod.number().int(),
   "pendingBalance": zod.number().int(),
+  "runningBalance": zod.number().int(),
   "mainBalance": zod.number().int(),
   "recentActivity": zod.array(zod.object({
   "id": zod.string(),
@@ -450,10 +451,9 @@ export const DeleteContactResponse = zod.object({
 
 
 /**
- * @summary Start the active campaign for the selected WhatsApp session
+ * @summary Start the active campaign using all online WhatsApp sessions
  */
 export const StartBlastBody = zod.object({
-  "sessionId": zod.string(),
   "delaySeconds": zod.union([zod.literal(1),zod.literal(5),zod.literal(15),zod.literal(30)])
 })
 
@@ -465,6 +465,14 @@ export const StartBlastResponse = zod.object({
   "sent": zod.number().int(),
   "failed": zod.number().int(),
   "pending": zod.number().int(),
+  "runningBalance": zod.number().int(),
+  "sessions": zod.array(zod.object({
+  "waSessionId": zod.string(),
+  "phone": zod.string().nullable(),
+  "status": zod.string(),
+  "sent": zod.number().int(),
+  "failed": zod.number().int()
+})),
   "startedAt": zod.coerce.date(),
   "finishedAt": zod.coerce.date().nullable()
 })
@@ -491,6 +499,14 @@ export const GetCurrentBlastResponse = zod.object({
   "sent": zod.number().int(),
   "failed": zod.number().int(),
   "pending": zod.number().int(),
+  "runningBalance": zod.number().int(),
+  "sessions": zod.array(zod.object({
+  "waSessionId": zod.string(),
+  "phone": zod.string().nullable(),
+  "status": zod.string(),
+  "sent": zod.number().int(),
+  "failed": zod.number().int()
+})),
   "startedAt": zod.coerce.date(),
   "finishedAt": zod.coerce.date().nullable()
 }),zod.null()])
@@ -608,15 +624,16 @@ export const ListCampaignResultSummariesResponse = zod.array(ListCampaignResultS
 export const GetWalletResponse = zod.object({
   "mainBalance": zod.number().int(),
   "pendingBalance": zod.number().int(),
+  "runningBalance": zod.number().int(),
   "lifetimeEarnings": zod.number().int(),
   "referralEarnings": zod.number().int(),
   "perMessage": zod.number().int(),
   "minimumWithdrawal": zod.number().int(),
   "transactions": zod.array(zod.object({
   "id": zod.string(),
-  "type": zod.enum(['earning', 'referral', 'withdrawal']),
+  "type": zod.enum(['earning', 'referral', 'withdrawal', 'withdraw_refund']),
   "amount": zod.number().int(),
-  "status": zod.enum(['pending', 'main', 'completed', 'rejected']),
+  "status": zod.enum(['pending', 'running', 'main', 'completed', 'rejected']),
   "description": zod.string(),
   "createdAt": zod.coerce.date()
 }))

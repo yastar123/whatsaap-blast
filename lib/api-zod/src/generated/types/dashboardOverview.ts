@@ -19,6 +19,7 @@ export interface DashboardOverview {
   sentByMe: number;
   failedByMe: number;
   pendingBalance: number;
+  runningBalance: number;
   mainBalance: number;
   recentActivity: ActivityItem[];
 }

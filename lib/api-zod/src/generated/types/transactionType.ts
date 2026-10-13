@@ -13,4 +13,5 @@ export const TransactionType = {
   earning: 'earning',
   referral: 'referral',
   withdrawal: 'withdrawal',
+  withdraw_refund: 'withdraw_refund',
 } as const;

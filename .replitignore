@@ -5,3 +5,4 @@
 .local
 .env
 **/.wa-sessions/
+/generated-artifacts/

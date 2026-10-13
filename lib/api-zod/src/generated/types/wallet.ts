@@ -10,6 +10,7 @@ import type { Transaction } from './transaction';
 export interface Wallet {
   mainBalance: number;
   pendingBalance: number;
+  runningBalance: number;
   lifetimeEarnings: number;
   referralEarnings: number;
   perMessage: number;

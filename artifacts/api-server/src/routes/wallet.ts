@@ -11,6 +11,7 @@ import {
   UpdateWithdrawalResponse,
 } from "@workspace/api-zod";
 import {
+  activityTable,
   db,
   transactionsTable,
   usersTable,
@@ -84,6 +85,7 @@ router.get("/wallet", async (req, res): Promise<void> => {
     GetWalletResponse.parse({
       mainBalance: user.mainBalance,
       pendingBalance: user.pendingBalance,
+      runningBalance: user.runningBalance,
       lifetimeEarnings: Number(lifetime?.value ?? 0),
       referralEarnings: Number(referrals?.value ?? 0),
       perMessage: settings.perMessage,
@@ -230,6 +232,11 @@ router.post("/withdrawals", async (req, res): Promise<void> => {
         refId: withdrawal.id,
         description: `Penarikan ${withdrawal.method} — ${withdrawal.accountName}`,
       });
+      await tx.insert(activityTable).values({
+        userId: user.id,
+        title: "Permintaan penarikan dibuat",
+        detail: `Permintaan ${withdrawal.id} sebesar Rp${withdrawal.amount.toLocaleString("id-ID")} diajukan.`,
+      });
       return withdrawal;
     });
   } catch (error) {
@@ -266,15 +273,24 @@ router.patch(
           .for("update")
           .limit(1);
         if (!withdrawal) throw new Error("Permintaan tidak ditemukan.");
-        if (withdrawal.status === "paid" || withdrawal.status === "rejected") {
-          throw new Error("Permintaan ini sudah selesai dan tidak dapat diubah.");
+        const nextStatus = parsed.data.status;
+        const allowed =
+          (withdrawal.status === "pending" &&
+            (nextStatus === "approved" || nextStatus === "rejected")) ||
+          (withdrawal.status === "approved" &&
+            (nextStatus === "paid" || nextStatus === "rejected"));
+        if (!allowed) {
+          throw new Error("Perubahan status tidak sesuai alur penarikan.");
+        }
+        if (nextStatus === "rejected" && !parsed.data.note?.trim()) {
+          throw new Error("Alasan penolakan wajib diisi.");
         }
         const [updated] = await tx
           .update(withdrawalsTable)
           .set({
-            status: parsed.data.status,
+            status: nextStatus,
             note: parsed.data.note ?? null,
-            processedAt: parsed.data.status === "approved" ? null : new Date(),
+            processedAt: new Date(),
           })
           .where(eq(withdrawalsTable.id, withdrawal.id))
           .returning();
@@ -296,20 +312,45 @@ router.patch(
             .update(transactionsTable)
             .set({
               status:
-                parsed.data.status === "paid"
+                nextStatus === "paid"
                   ? "completed"
-                  : parsed.data.status === "rejected"
+                  : nextStatus === "rejected"
                     ? "rejected"
                     : "pending",
             })
             .where(eq(transactionsTable.id, transaction.id));
         }
-        if (parsed.data.status === "rejected") {
+        if (nextStatus === "rejected") {
+          const [refund] = await tx
+            .insert(transactionsTable)
+            .values({
+              userId: withdrawal.userId,
+              type: "withdraw_refund",
+              amount: withdrawal.amount,
+              status: "main",
+              refId: withdrawal.id,
+              description: `Pengembalian dana untuk penarikan ${withdrawal.id}.`,
+            })
+            .onConflictDoNothing()
+            .returning({ id: transactionsTable.id });
+          if (!refund) {
+            throw new Error("Pengembalian dana untuk permintaan ini sudah tercatat.");
+          }
           await tx
             .update(usersTable)
             .set({ mainBalance: sql`${usersTable.mainBalance} + ${withdrawal.amount}` })
             .where(eq(usersTable.id, withdrawal.userId));
         }
+        await tx.insert(activityTable).values({
+          userId: withdrawal.userId,
+          title:
+            nextStatus === "approved"
+              ? "Penarikan mulai diproses"
+              : nextStatus === "paid"
+                ? "Penarikan ditandai berhasil"
+                : "Permintaan penarikan ditolak",
+          detail: `Admin ${req.auth!.userId} mengubah permintaan ${withdrawal.id} dari ${withdrawal.status} menjadi ${nextStatus} (Rp${withdrawal.amount.toLocaleString("id-ID")}).${parsed.data.note ? ` Catatan: ${parsed.data.note}` : ""}`,
+        });
         return [updated];
       });
       res.json(

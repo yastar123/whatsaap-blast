@@ -123,6 +123,7 @@ export interface DashboardOverview {
   sentByMe: number;
   failedByMe: number;
   pendingBalance: number;
+  runningBalance: number;
   mainBalance: number;
   recentActivity: ActivityItem[];
 }
@@ -287,8 +288,16 @@ export const BlastStartInputDelaySeconds = {
 } as const;
 
 export interface BlastStartInput {
-  sessionId: string;
   delaySeconds: BlastStartInputDelaySeconds;
+}
+
+export interface BlastJobSession {
+  waSessionId: string;
+  /** @nullable */
+  phone: string | null;
+  status: string;
+  sent: number;
+  failed: number;
 }
 
 export type BlastJobStatus = typeof BlastJobStatus[keyof typeof BlastJobStatus];
@@ -309,6 +318,8 @@ export interface BlastJob {
   sent: number;
   failed: number;
   pending: number;
+  runningBalance: number;
+  sessions: BlastJobSession[];
   startedAt: string;
   /** @nullable */
   finishedAt: string | null;
@@ -376,6 +387,7 @@ export const TransactionType = {
   earning: 'earning',
   referral: 'referral',
   withdrawal: 'withdrawal',
+  withdraw_refund: 'withdraw_refund',
 } as const;
 
 export type TransactionStatus = typeof TransactionStatus[keyof typeof TransactionStatus];
@@ -383,6 +395,7 @@ export type TransactionStatus = typeof TransactionStatus[keyof typeof Transactio
 
 export const TransactionStatus = {
   pending: 'pending',
+  running: 'running',
   main: 'main',
   completed: 'completed',
   rejected: 'rejected',
@@ -400,6 +413,7 @@ export interface Transaction {
 export interface Wallet {
   mainBalance: number;
   pendingBalance: number;
+  runningBalance: number;
   lifetimeEarnings: number;
   referralEarnings: number;
   perMessage: number;

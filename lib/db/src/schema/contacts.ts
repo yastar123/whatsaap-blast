@@ -20,6 +20,7 @@ export const contactsTable = pgTable(
     lockedByUserId: uuid("locked_by_user_id"),
     lockedAt: timestamp("locked_at", { withTimezone: true }),
     waSessionId: uuid("wa_session_id"),
+    waSenderPhone: text("wa_sender_phone"),
     errorReason: text("error_reason"),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     messageId: text("message_id"),
