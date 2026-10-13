@@ -725,3 +725,246 @@ tbody tr:last-child td { border-bottom:0; }
     inset: -1px;
   }
 }
+
+/* WA Campaign dark operations theme */
+:root {
+  color-scheme: dark;
+  --button-outline: rgba(230, 232, 235, .12);
+  --badge-outline: rgba(230, 232, 235, .08);
+  --opaque-button-border-intensity: 7;
+  --elevate-1: rgba(230, 232, 235, .035);
+  --elevate-2: rgba(230, 232, 235, .07);
+  --background: 220 17% 5%;
+  --foreground: 216 10% 91%;
+  --border: 216 14% 17%;
+  --card: 210 17% 9%;
+  --card-foreground: 216 10% 91%;
+  --card-border: 216 14% 17%;
+  --sidebar: 220 18% 6%;
+  --sidebar-foreground: 216 10% 91%;
+  --sidebar-border: 216 14% 17%;
+  --sidebar-primary: 150 63% 54%;
+  --sidebar-primary-foreground: 220 17% 5%;
+  --sidebar-accent: 216 18% 12%;
+  --sidebar-accent-foreground: 216 10% 91%;
+  --sidebar-ring: 150 63% 54%;
+  --popover: 216 18% 11%;
+  --popover-foreground: 216 10% 91%;
+  --popover-border: 216 14% 17%;
+  --primary: 150 63% 54%;
+  --primary-foreground: 220 17% 5%;
+  --secondary: 216 18% 12%;
+  --secondary-foreground: 216 10% 91%;
+  --muted: 216 18% 12%;
+  --muted-foreground: 217 8% 57%;
+  --accent: 150 63% 54%;
+  --accent-foreground: 220 17% 5%;
+  --destructive: 4 69% 61%;
+  --destructive-foreground: 0 0% 100%;
+  --input: 216 14% 20%;
+  --ring: 150 63% 54%;
+  --chart-1: 150 63% 54%;
+  --chart-2: 39 88% 64%;
+  --chart-3: 199 68% 65%;
+  --chart-4: 4 69% 61%;
+  --chart-5: 272 52% 70%;
+}
+
+body { background: #0b0d10; color: #e6e8eb; }
+.sidebar { background: #0d1014; border-right: 1px solid #232830; }
+.brand-mark { background: #3dd68c; color: #0b0d10; }
+.workspace-label,.nav-heading { color: #69717d; }
+.nav-link { color: #a4abb5; }
+.nav-link:hover { color: #e6e8eb; background: #181c22; }
+.nav-link.nav-active { background: rgba(61,214,140,.12); color: #3dd68c; }
+.nav-active::before { background: #3dd68c; }
+.consent-card { background: #121a17; border-color: #23372e; }
+.consent-card b { color: #dce8e1; }
+.consent-card p,.profile-copy span { color: #8a919c; }
+.profile-row { border-color: #232830; }
+.avatar { background: #315b48; color: #c9f3dd; }
+.topbar { background: rgba(18,21,26,.96); border-color: #232830; }
+.breadcrumbs { color: #707783; }
+.breadcrumbs b,.top-profile { color: #d7dbe0; }
+.crumb-slash { color: #4c535d; }
+.system-status { color: #9ca69f; }
+.icon-button { color: #929aa5; }
+.notification-button i { border-color: #12151a; }
+.page-heading h1,.section-title h2 { color: #e6e8eb; }
+.page-heading p,.page-date,.section-title p,.eyebrow { color: #8a919c; }
+.date-dot { background: #3dd68c; box-shadow: 0 0 0 3px rgba(61,214,140,.12); }
+.page-footer { color: #737b86; border-color: #232830; }
+.page-footer b,.page-footer svg { color: #3dd68c; }
+.panel,.metric-card { background: #12151a; border-color: #232830; box-shadow: none; }
+.section-title h2 { font-weight: 700; }
+.text-link,.compact-empty a,.session-action { color: #3dd68c; }
+.icon-link { border-color: #303640; color: #aab1ba; }
+.button-primary { background: #3dd68c; color: #0b0d10; border-color: #3dd68c; }
+.button-primary:hover:not(:disabled) { background: #59e3a0; border-color: #59e3a0; }
+.button-secondary { background: #181c22; color: #d3d7dd; border-color: #303640; }
+.button-secondary:hover:not(:disabled) { background: #20252d; border-color: #424a56; }
+.button-danger { background: #2a1718; color: #ff9b91; border-color: #593032; }
+.status { background: #22262d; color: #aab1bb; }
+.status-online,.status-active,.status-sent,.status-approved,.status-paid,.status-completed { background: #14271f; color: #62dda0; }
+.status-running,.status-pending,.status-connecting { background: #2b2416; color: #f0c46b; }
+.status-failed,.status-blocked,.status-rejected,.status-opted_out { background: #301a1b; color: #ff928a; }
+.status-offline,.status-logged_out,.status-unsent,.status-draft,.status-paused,.status-cancelled { background: #20242a; color: #929aa5; }
+.metric-icon { color: #a2acb7; background: #20252c; }
+.metric-icon.mint { color: #3dd68c; background: #14271f; }
+.metric-icon.gold { color: #f0c46b; background: #2b2416; }
+.metric-icon.blue { color: #80c9e8; background: #17252d; }
+.metric-icon.rose { color: #ff928a; background: #301a1b; }
+.metric-label,.metric-hint { color: #8a919c; }
+.metric-value { color: #e6e8eb; }
+.welcome-strip,.wallet-hero,.blast-policy { background: #14251e; border-color: #23372e; }
+.welcome-strip h2,.wallet-heading h2,.blast-policy h3 { color: #e6eee9; }
+.welcome-strip p,.wallet-heading p,.blast-policy>p { color: #aab9b0; }
+.welcome-kicker,.wallet-heading .eyebrow,.blast-policy .eyebrow { color: #81cfa5; }
+.welcome-symbol { color: #3dd68c; border-color: #3b6650; }
+.campaign-art,.campaign-mark,.session-icon,.activity-mark,.empty-icon { background: #1c2923; color: #65d99d; }
+.campaign-art span { color: #9bb0a2; }
+.campaign-title-row h3,.session-copy b,.activity-row b { color: #dce0e5; }
+.campaign-copy p,.campaign-row-copy p,.campaign-stats,.session-copy span,.activity-row p,.activity-row time { color: #8a919c; }
+.campaign-stats b { color: #c5d0c8; }
+.session-row,.session-action,.activity-row,.session-manage-row,.add-session-form,.summary-row,.transaction-row,.withdrawal-row { border-color: #232830; }
+.activity-1 { background: #2c261a; color: #e3bd69; }
+.activity-2 { background: #19262d; color: #80c9e8; }
+.principles-panel,.blast-campaign-card,.referral-hero,.light-note { background: #181c22; border-color: #2b313a; color: #e6e8eb; }
+.principle-overline,.principle-rule svg,.principles-panel h3 em,.referral-copy h2 em { color: #63d99c; }
+.principles-panel h3,.blast-campaign-card h2,.pairing-panel h2,.progress-heading h3,.withdrawal-form-head h2 { color: #e6e8eb; }
+.principles-panel>p,.principle-rule,.blast-campaign-card>p,.blast-campaign-meta,.pairing-panel>p { color: #a0a7b1; }
+.principle-rule { border-color: #2b313a; }
+.empty-panel,.compact-empty { color: #8a919c; }
+.empty-panel b { color: #d4d9df; }
+.empty-panel span { color: #8a919c; }
+.whatsapp-layout,.blast-layout,.withdrawal-layout,.contacts-layout,.settings-layout { color: #e6e8eb; }
+.secure-badge { color: #72dba5; background: #14271f; border-color: #294535; }
+.danger-icon { color: #ff928a; }
+.add-session-label,.form-label,.pair-input-label,.auth-form label,.modal-card label,.withdrawal-form label,.import-panel>label { color: #c0c6ce; }
+input,select,textarea { background: #0f1216; border-color: #303640; color: #e6e8eb; }
+input:focus,select:focus,textarea:focus { border-color: #3dd68c; box-shadow: 0 0 0 3px rgba(61,214,140,.12); }
+input::placeholder,textarea::placeholder { color: #5c6370; }
+.pair-tabs { background: #0f1216; }
+.pair-tab { color: #8a919c; }
+.pair-tab.active { background: #20252c; color: #3dd68c; box-shadow: none; }
+.qr-box { background: #0f1216; border-color: #303640; }
+.qr-placeholder,.qr-placeholder span { color: #8a919c; }
+.pairing-code { color: #e6e8eb; }
+.qr-instructions p { color: #a0a7b1; }
+.qr-instructions b { color: #e6e8eb; }
+.safe-note,.blast-help,.admin-no-start { background: #171d19; border-color: #2b3b31; color: #8bd8aa; }
+.safe-note p,.blast-help p { color: #a4afa8; }
+.safe-note b,.blast-help b { color: #d6e5da; }
+.active-campaign-tag { color: #8bd8aa; }
+.blast-campaign-meta { border-color: #2b313a; }
+.progress-heading h3 { color: #dce0e5; }
+.progress-number { color: #3dd68c; }
+.progress-track { background: #252a31; }
+.progress-track i { background: #3dd68c; }
+.progress-number small,.progress-breakdown { color: #8a919c; }
+.sent-count { color: #62dda0; }.fail-count,.error-reason { color: #ff928a; }
+.select-session,.delay-option { background: #101318; border-color: #2a3038; color: #aab1bb; }
+.select-session.selected,.delay-option.chosen { background: #14251e; border-color: #3a805a; }
+.select-session b,.delay-option b { color: #e0e4e8; }
+.select-session small { color: #8a919c; }
+.radio-dot { border-color: #56606b; }
+.selected .radio-dot,.delay-option.chosen svg { border-color: #3dd68c; color: #3dd68c; }
+.no-session { border-color: #303640; color: #8a919c; }
+.no-session a { color: #3dd68c; }
+.policy-stamp { color: #3dd68c; border-color: #345442; }
+.policy-divider { background: #2c4436; }
+.policy-item { color: #c0d3c6; }
+.policy-item svg { color: #62dda0; }
+.policy-item.policy-muted { color: #929ba2; }
+.policy-muted svg { color: #e5ae68; }
+.search-field { background: #0f1216; border-color: #303640; color: #8a919c; }
+.search-field input { background: transparent; }
+th { background: #181c22; color: #9aa2ad; border-color: #2a3038; }
+td { color: #b3bac3; border-color: #232830; }
+.mono { color: #d0d5db; }
+.table-footer { color: #8a919c; border-color: #232830; }
+.table-loading { color: #8a919c; }
+.summary-row { color: #a1a8b2; border-color: #232830; }
+.summary-row b { color: #e0e4e8; }
+.summary-index { color: #e4bf70; }
+.wallet-balance { background: #1b2921; border-color: #345442; }
+.wallet-balance>span,.wallet-balance small { color: #a8c6b2; }
+.transaction-icon { background: #14271f; color: #62dda0; }
+.tx-referral { background: #17252d; color: #80c9e8; }
+.tx-withdrawal { background: #2b2119; color: #e0a879; }
+.transaction-copy b { color: #dce0e5; }
+.transaction-copy span { color: #8a919c; }
+.transaction-amount,.money-cell { color: #62dda0; }
+.transaction-amount.amount-out { color: #ff928a; }
+.referral-copy h2 { color: #e6e8eb; }
+.referral-copy p { color: #a0a7b1; }
+.referral-code { background: #101318; border-color: #303640; }
+.referral-code span { color: #8a919c; }
+.referral-code b,.referral-code button { color: #3dd68c; }
+.referral-decoration { border-color: #303740; color: #718679; box-shadow: 0 0 0 22px rgba(230,232,235,.025),0 0 0 45px rgba(230,232,235,.018); }
+.withdrawal-form-head p,.withdrawal-form label small { color: #8a919c; }
+.available-balance { background: #171d19; border-color: #2c4033; }
+.available-balance span { color: #9ba79f; }
+.available-balance b { color: #62dda0; }
+.withdrawal-status { color: #b3bac3; }
+.campaign-row,.campaign-list-row,.downline-row,.customer-row { border-color: #232830; }
+.campaign-row-art { background: #1c2923; color: #65d99d; }
+.campaign-current { background: linear-gradient(90deg,rgba(61,214,140,.08),transparent); }
+.current-tag { color: #62dda0; background: #14271f; }
+.withdrawal-icon { background: #2b2416; color: #e6bd6a; }
+.withdrawal-copy b { color: #dce0e5; }
+.withdrawal-copy span,.withdrawal-copy small { color: #8a919c; }
+.review-actions button { background: #181c22; border-color: #303640; color: #62dda0; }
+.review-actions button:last-child { color: #ff928a; }
+.admin-note { background: #181c22; color: #a8b1a7; }
+.modal-backdrop { background: rgba(0,0,0,.76); }
+.modal-top h2 { color: #e6e8eb; }
+.optional { color: #8a919c; }
+.consent-banner { background: #14251e; border-color: #294535; }
+.consent-banner-icon { background: #1b3427; color: #62dda0; }
+.consent-banner b { color: #cfe3d6; }
+.consent-banner p,.consent-lock { color: #9aafa1; }
+.import-format { background: #181c22; }
+.import-format span,.import-hint { color: #8a919c; }
+.import-format code { color: #8bd8aa; }
+.customer-cell b { color: #dce0e5; }
+.customer-cell small { color: #8a919c; }
+.settings-fields>label,.setting-toggle-row { border-color: #232830; }
+.settings-fields>label,.setting-toggle-row b { color: #c5cbd2; }
+.settings-fields>label>span,.setting-toggle-row span { color: #8a919c; }
+.setting-input { background: #0f1216; border-color: #303640; color: #8a919c; }
+.setting-input input { background: transparent; color: #e6e8eb; }
+.toggle-switch { background: #3b424c; }
+.toggle-switch i { background: #d7dce1; }
+.toggle-switch.toggle-on { background: #238855; }
+.settings-note { background: #14251e; color: #e6eee9; }
+.settings-note .note-icon { color: #3dd68c; border-color: #345442; }
+.settings-note>p { color: #aab9b0; }
+.light-note>b { color: #dce0e5; }
+.inline-error { color: #ff9b91; background: #301a1b; }
+.inline-success { color: #62dda0; background: #14271f; }
+
+/* Compact, centered authentication surface; no split illustration panel. */
+.auth-layout { min-height: 100dvh; display: grid; grid-template-columns: 1fr; place-items: center; padding: 32px 18px; background: #0b0d10; }
+.auth-aside { display: none; }
+.auth-main { min-height: 0; width: min(440px, 100%); display: block; padding: 0; }
+.auth-form-wrap { width: 100%; padding: 34px; background: #12151a; border: 1px solid #232830; border-radius: 12px; box-shadow: 0 24px 70px rgba(0,0,0,.28); }
+.mobile-brand { display: block; color: #e6e8eb; font: 800 20px var(--app-font-serif); margin: 0 0 32px; }
+.mobile-brand span { color: #3dd68c; }
+.auth-eyebrow { color: #8a919c; }
+.auth-form-wrap h1 { color: #e6e8eb; }
+.auth-subtitle,.auth-switch { color: #8a919c; }
+.auth-switch a { color: #3dd68c; }
+.auth-trust { color: #858d98; }
+.auth-trust svg { color: #3dd68c; }
+.auth-bottom { position: static; width: min(440px,100%); margin: 16px auto 0; color: #5c6370; padding: 0 4px; }
+.auth-bottom span { color: #858d98; }
+.loading-screen { background: #0b0d10; }
+.skeleton { background: linear-gradient(90deg,#171b21,#20252d,#171b21); background-size: 200% 100%; }
+.modal-card { background: #12151a; border-color: #303640; color: #e6e8eb; }
+.modal-overlay { background: rgba(0,0,0,.72); }
+
+@media (max-width: 640px) {
+  .auth-form-wrap { padding: 25px 21px; }
+  .auth-bottom { margin-top: 14px; }
+}
