@@ -15,7 +15,7 @@ import {
 } from "../lib/blast-worker";
 
 const router: IRouter = Router();
-router.use(requireAuth, requireCustomer);
+router.use("/blast", requireAuth, requireCustomer);
 
 router.post("/blast/start", async (req, res): Promise<void> => {
   const parsed = StartBlastBody.safeParse(req.body);

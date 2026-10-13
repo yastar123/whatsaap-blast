@@ -18,7 +18,7 @@ import {
 } from "../lib/baileys-manager";
 
 const router: IRouter = Router();
-router.use(requireAuth, requireCustomer);
+router.use("/wa-sessions", requireAuth, requireCustomer);
 
 function toSessionDto(session: typeof waSessionsTable.$inferSelect) {
   return {
