@@ -17,7 +17,13 @@ const testEmail = `qa-${suffix}@example.invalid`;
 const testPassword = `Qa-${suffix}-T8!`;
 const campaignTitle = `QA smoke campaign ${suffix}`;
 const failures = [];
-const created = { userId: null, campaignId: null, sessionId: null };
+const created = {
+  userId: null,
+  campaignId: null,
+  contactId: null,
+  sessionId: null,
+  previousActiveCampaigns: [],
+};
 const issuedTokens = [];
 
 function check(name, passed, detail = "") {
@@ -193,6 +199,18 @@ async function apiTests() {
       settings.data?.minimumWithdrawal === 15000 &&
       settings.data?.sessionIdleMinutes === 10,
   );
+  const savedSettings = await request("/admin/settings", {
+    method: "PATCH",
+    token: admin.accessToken,
+    body: settings.data,
+  });
+  expectStatus("admin can save business settings", savedSettings, 200);
+  check(
+    "saving settings preserves configured values",
+    Object.entries(settings.data ?? {}).every(
+      ([key, value]) => savedSettings.data?.[key] === value,
+    ),
+  );
 
   const customerReads = [
     ["customer dashboard", "/dashboard/overview"],
@@ -333,6 +351,86 @@ async function apiTests() {
         invalidImport.data?.invalid === 1 &&
         invalidImport.data?.consentMissing === 1,
     );
+
+    const consentAt = new Date(Date.now() - 60_000).toISOString();
+    const testPhone = `628${suffix.replace(/\D/g, "").padEnd(10, "7").slice(0, 10)}`;
+    const eligibleContact = {
+      phone: testPhone,
+      consentSource: "QA smoke test — synthetic record, not for delivery",
+      consentAt,
+    };
+    const validImport = await request("/admin/contacts", {
+      method: "POST",
+      token: admin.accessToken,
+      body: { campaignId: created.campaignId, contacts: [eligibleContact] },
+    });
+    expectStatus("admin imports a contact with valid consent evidence", validImport, 201);
+    check(
+      "eligible contact is added once",
+      validImport.data?.added === 1 && validImport.data?.duplicates === 0,
+    );
+    const duplicateImport = await request("/admin/contacts", {
+      method: "POST",
+      token: admin.accessToken,
+      body: { campaignId: created.campaignId, contacts: [eligibleContact] },
+    });
+    expectStatus("duplicate contact import is handled", duplicateImport, 201);
+    check(
+      "duplicate contact is not inserted twice",
+      duplicateImport.data?.added === 0 && duplicateImport.data?.duplicates === 1,
+    );
+    const importedContacts = await request(
+      `/admin/contacts?campaignId=${created.campaignId}&search=${testPhone}`,
+      { token: admin.accessToken },
+    );
+    expectStatus("admin can find an imported contact", importedContacts, 200);
+    const matchingContact = importedContacts.data?.items?.find(
+      (item) => item.phone === testPhone,
+    );
+    check("imported contact retains its consent details", Boolean(
+      matchingContact?.consentSource === eligibleContact.consentSource &&
+      matchingContact?.consentAt,
+    ));
+    if (matchingContact?.id) created.contactId = matchingContact.id;
+
+    const activeBefore = await pool.query(
+      "SELECT id, status FROM campaigns WHERE is_active = true",
+    );
+    created.previousActiveCampaigns = activeBefore.rows;
+    const activated = await request(`/admin/campaigns/${created.campaignId}/activate`, {
+      method: "POST",
+      token: admin.accessToken,
+    });
+    expectStatus("admin activates a campaign", activated, 200);
+    if (activated.data?.isActive) created.campaignActivated = true;
+    check(
+      "activated campaign becomes the single active campaign",
+      activated.data?.id === created.campaignId &&
+        activated.data?.isActive === true &&
+        activated.data?.status === "active",
+    );
+    const customerActiveCampaign = await request("/campaigns/active", {
+      token: customer.accessToken,
+    });
+    expectStatus("customer sees the active campaign", customerActiveCampaign, 200);
+    check(
+      "customer receives the selected campaign",
+      customerActiveCampaign.data?.campaign?.id === created.campaignId,
+    );
+    const noOnlineSessionStart = await request("/blast/start", {
+      method: "POST",
+      token: customer.accessToken,
+      body: { delaySeconds: 1 },
+    });
+    expectStatus("an active campaign cannot send without an online WhatsApp session", noOnlineSessionStart, 409);
+    if (created.contactId) {
+      const deletedContact = await request(`/admin/contacts/${created.contactId}`, {
+        method: "DELETE",
+        token: admin.accessToken,
+      });
+      expectStatus("admin deletes an imported contact", deletedContact, 200);
+      created.contactId = null;
+    }
   }
   const missingActivation = await request(`/admin/campaigns/${randomUUID()}/activate`, {
     method: "POST",
@@ -372,6 +470,32 @@ async function apiTests() {
       token: customer.accessToken,
     });
     expectStatus("customer deletes an unpaired WA session", deletedSession, 200);
+    created.sessionId = null;
+  }
+
+  const adminDisconnectSession = await request("/wa-sessions", {
+    method: "POST",
+    token: customer.accessToken,
+    body: { label: `QA admin disconnect ${suffix.slice(0, 8)}` },
+  });
+  expectStatus("customer creates a session for admin disconnect review", adminDisconnectSession, 201);
+  if (adminDisconnectSession.status === 201 && adminDisconnectSession.data?.id) {
+    created.sessionId = adminDisconnectSession.data.id;
+    const adminDisconnect = await request(
+      `/admin/wa-sessions/${created.sessionId}`,
+      { method: "DELETE", token: admin.accessToken },
+    );
+    expectStatus("admin disconnects a customer WhatsApp session", adminDisconnect, 200);
+    const sessionsAfterDisconnect = await request("/wa-sessions", {
+      token: customer.accessToken,
+    });
+    check(
+      "admin-disconnected session remains listed as offline",
+      sessionsAfterDisconnect.status === 200 &&
+        sessionsAfterDisconnect.data?.some(
+          (item) => item.id === created.sessionId && item.status === "offline",
+        ),
+    );
     created.sessionId = null;
   }
 
@@ -432,10 +556,31 @@ async function apiTests() {
 
   await testWithdrawalFlow(admin, customer);
 
+  if (created.campaignId && created.campaignActivated) {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "UPDATE campaigns SET is_active = false, status = 'paused' WHERE is_active = true",
+      );
+      for (const campaign of created.previousActiveCampaigns) {
+        await client.query(
+          "UPDATE campaigns SET is_active = true, status = $2 WHERE id = $1",
+          [campaign.id, campaign.status],
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
   const deletedCampaign = created.campaignId
     ? await request(`/admin/campaigns/${created.campaignId}`, {
         method: "DELETE",
-        token: admin.accessToken,
+        token: issuedTokens[0],
       })
     : null;
   if (deletedCampaign) {

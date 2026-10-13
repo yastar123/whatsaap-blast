@@ -1,32 +1,113 @@
 # Titipkirim — WA Campaign
 
-Dashboard berbahasa Indonesia untuk mengelola kampanye WhatsApp, sesi pengirim, hasil, referral, dan penarikan. Pengiriman hanya mengambil kontak yang memiliki bukti consent aktif; 300 kontak seed adalah placeholder dan tidak dapat dikirimi pesan.
+Titipkirim adalah dashboard berbahasa Indonesia untuk mengelola kampanye WhatsApp berbasis persetujuan (consent), sesi pengirim, hasil pesan, referral, saldo, dan penarikan. Produk memiliki portal customer dan panel administrator.
 
-## Stack dan struktur
+> **Penting:** kirim pesan hanya kepada penerima yang memberikan persetujuan aktif. Jangan menggunakan 300 kontak seed untuk pengiriman: semuanya nomor placeholder tanpa bukti consent dan tidak memenuhi syarat antrean. Hormati permintaan berhenti (opt-out).
 
-- Frontend: React, Vite, Wouter, TanStack Query, Tailwind CSS.
-- Backend: Express, Socket.IO, JWT, Baileys.
-- Database: PostgreSQL dengan Drizzle ORM.
-- `artifacts/wa-campaign/` — frontend.
-- `artifacts/api-server/` — API, sesi WhatsApp, worker blast, dan seed.
-- `lib/db/src/schema/` — skema database.
-- `lib/api-spec/openapi.yaml` — kontrak API; kode client/server dihasilkan dari sini.
+## Isi aplikasi
+
+### Portal customer
+
+- **Ringkasan** — jumlah pesan berhasil/gagal, saldo utama dan saldo berjalan, kampanye aktif, sesi WhatsApp, serta aktivitas terkini.
+- **WhatsApp** — membuat hingga lima sesi per akun, menautkan perangkat dengan QR atau pairing code, melihat status, dan menghapus sesi milik sendiri. Pemilik nomor harus menyetujui penautan pada aplikasi WhatsApp di ponselnya.
+- **Kirim kampanye** — melihat naskah dan kampanye yang dipilih admin, memilih jeda 1, 5, 15, atau 30 detik, memulai/membatalkan blast, dan melihat progres serta hasil per sesi. Semua sesi online customer menjadi pekerja paralel.
+- **Hasil pengiriman** — menelusuri status, memfilter kampanye/status, mencari nomor, membuka ringkasan, dan mengunduh CSV atau XLSX.
+- **Dompet** — melihat saldo utama, saldo berjalan/tertunda, pendapatan pesan dan referral, serta riwayat transaksi.
+- **Referral** — menyalin tautan/kode undangan, melihat downline, dan melihat bonus.
+- **Penarikan** — mengajukan pencairan ke rekening bank atau dompet digital dan memantau status. Nomor rekening customer ditampilkan tersamarkan.
+
+### Panel administrator
+
+- **Ringkasan** — metrik customer, sesi online, jumlah pesan terkirim, dan nilai pendapatan yang dibayarkan.
+- **Kampanye** — membuat, mengubah, mengaktifkan, dan menghapus kampanye yang memenuhi syarat.
+- **Kontak & consent** — mengimpor baris `nomor, sumber consent, waktu ISO`, mencari/memfilter kontak, melihat status serta bukti consent, dan menghapus kontak.
+- **Akun pengirim** — mencari customer dan mengaktifkan atau memblokir akunnya.
+- **Sesi semua pengirim** — memantau dan memutus sesi WhatsApp milik customer.
+- **Pengaturan** — mengubah tarif per pesan, bonus referral, minimum penarikan, jam tunggu pelepasan saldo, batas pesan per sesi per jam, masa idle sesi, dan kebijakan antrekan ulang setelah sesi terputus.
+- **Hasil pengiriman dan penarikan** — melihat hasil lintas customer; meninjau, menyetujui, membayar, atau menolak permintaan penarikan dengan alasan.
+
+Halaman terdaftar: `/`, `/login`, `/register`, `/whatsapp`, `/blast`, `/results`, `/wallet`, `/referrals`, `/withdrawals`, `/campaigns`, `/contacts`, `/customers`, `/admin/sessions`, dan `/settings`. Menu dibatasi menurut peran; API memeriksa otorisasi yang sama di server. Login, register, dan API memerlukan koneksi server/database.
+
+## Aturan operasional
+
+1. Admin membuat kampanye, memasukkan naskah, mengimpor nomor, lalu mengaktifkan kampanye.
+2. Saat impor, setiap kontak harus memiliki nomor valid, sumber consent, dan tanggal/waktu persetujuan yang tidak berada di masa depan. Nomor dinormalisasi ke angka; nomor duplikat di kampanye yang sama tidak dimasukkan ulang.
+3. Pekerja blast memeriksa ulang bahwa sumber dan waktu consent ada serta consent belum dicabut sebelum mengklaim kontak. Klaim menggunakan penguncian database agar sesi paralel tidak mengambil kontak yang sama. Kontak placeholder seed tidak memenuhi syarat.
+4. Customer harus mempunyai sesi WhatsApp **online** untuk memulai blast. Sesi yang sudah online berjalan paralel; laju tetap dibatasi oleh jeda pilihan dan batas per jam pada pengaturan.
+5. Progres dan status sesi/pesan dipublikasikan melalui Socket.IO. Hasil juga tersimpan di database dan dapat diekspor.
+6. Pendapatan selama blast masuk ke saldo berjalan. Saat pekerjaan selesai atau dibatalkan, saldo berjalan dipindahkan ke saldo utama. Bonus referral masuk ke saldo utama.
+7. Permintaan penarikan menahan saldo utama secara transaksional. Admin memproses status `pending → approved → paid`, atau menolak dengan alasan. Penolakan mengembalikan saldo sekali saja; permintaan yang sudah dibayar tidak dapat diubah.
+8. Admin dapat memblokir customer; akses customer yang diblokir ditolak sampai diaktifkan kembali.
+
+Nilai awal pengaturan: Rp1.100 per pesan berhasil, bonus referral Rp60 per pesan, minimum penarikan Rp15.000, pelepasan saldo tertunda 24 jam, maksimal 30 pesan per sesi per jam, masa idle 10 menit, dan antre ulang saat sesi terputus aktif.
+
+## Teknologi dan struktur
+
+- **Workspace:** pnpm workspaces, TypeScript.
+- **Web:** React, Vite, Wouter, TanStack Query, Tailwind CSS, komponen Radix UI.
+- **API:** Express 5, Socket.IO, JWT, Baileys, ExcelJS.
+- **Data:** PostgreSQL, Drizzle ORM; validasi kontrak Zod.
+- **Kontrak API:** `lib/api-spec/openapi.yaml` adalah sumber spesifikasi; client React Query dan schema Zod digenerate.
+
+| Lokasi | Isi |
+| --- | --- |
+| `artifacts/wa-campaign/` | Frontend React/Vite dan halaman dashboard |
+| `artifacts/api-server/src/routes/` | Route API |
+| `artifacts/api-server/src/lib/` | Auth, pairing Baileys, worker blast, saldo, dan pengaturan |
+| `artifacts/api-server/src/seed.ts` | Data demo development |
+| `artifacts/api-server/src/smoke-test.mjs` | Tes integrasi API dan halaman |
+| `lib/api-spec/openapi.yaml` | Kontrak endpoint |
+| `lib/api-client-react/`, `lib/api-zod/` | Client dan validasi hasil codegen |
+| `lib/db/src/schema/` | Skema PostgreSQL |
+| `scripts/` | Backup dan pembaruan skema database |
+
+## API
+
+Semua route HTTP tersedia dengan prefiks `/api`; dokumentasi request/response lengkap ada di `lib/api-spec/openapi.yaml`. Route yang memerlukan login memakai `Authorization: Bearer <accessToken>`.
+
+| Area | Endpoint |
+| --- | --- |
+| Status | `GET /healthz` |
+| Akun | `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me` |
+| Ringkasan | `GET /dashboard/overview`, `GET /campaigns/active` |
+| Sesi customer | `GET/POST /wa-sessions`, `POST /wa-sessions/{sessionId}/connect`, `DELETE /wa-sessions/{sessionId}` |
+| Sesi admin | `GET /admin/wa-sessions`, `DELETE /admin/wa-sessions/{sessionId}` |
+| Kampanye | `GET/POST /admin/campaigns`, `PATCH/DELETE /admin/campaigns/{campaignId}`, `POST /admin/campaigns/{campaignId}/activate` |
+| Kontak | `GET/POST /admin/contacts`, `DELETE /admin/contacts/{contactId}` |
+| Customer | `GET /admin/users`, `PATCH /admin/users/{userId}/status` |
+| Blast | `POST /blast/start`, `POST /blast/cancel`, `GET /blast/current` |
+| Hasil | `GET /results`, `/results/summary`, `/results/campaigns`, `/results/export` |
+| Dompet dan referral | `GET /wallet`, `GET /referrals` |
+| Penarikan | `GET/POST /withdrawals`, `PATCH /admin/withdrawals/{withdrawalId}` |
+| Pengaturan | `GET/PATCH /admin/settings` |
+| Realtime | Socket.IO pada `/api/socket.io` |
 
 ## Menjalankan di Replit
 
-1. Jalankan `pnpm install --frozen-lockfile`.
-2. Siapkan skema development dengan `pnpm run db:push:backup` (membuat backup sebelum mengubah skema).
-3. Buat akun demo dan 300 placeholder dengan `pnpm --filter @workspace/api-server run seed`.
-4. Jalankan workflow `artifacts/api-server: API Server` dan `artifacts/wa-campaign: web`.
-5. Buka preview web di `/`. Endpoint API dan Socket.IO tersedia melalui `/api`.
+Project memiliki dua workflow artifact terkelola; gunakan keduanya dan jangan membuat workflow duplikat:
 
-Replit mengatur port lokal setiap artifact secara otomatis dan meneruskan trafik melalui path di atas; nilai port lokal tidak harus `3000` dan `5000`. Untuk menjalankan layanan di luar Replit, API dapat memakai `PORT=5000` dan Vite `PORT=3000` serta `BASE_PATH=/`. Muat variabel dari `.env` ke shell sebelum menjalankan perintah. Vite di Replit menggunakan proxy path platform untuk mengakses API.
+- `artifacts/api-server: API Server` — Express, Socket.IO, worker dan API pada `/api`.
+- `artifacts/wa-campaign: web` — frontend pada `/`.
 
-## Database, environment, dan seed
+Replit meneruskan path dan memberikan `PORT`/`BASE_PATH` kepada tiap layanan. Buka preview web di `/`; jangan mengasumsikan port lokal tertentu.
 
-Replit menyediakan `DATABASE_URL` secara otomatis. `SESSION_SECRET` harus tersedia sebagai Replit Secret. Jangan commit `.env` atau isi folder `.wa-sessions`.
+Setup pertama:
 
-Untuk lingkungan lokal, salin `.env.example` ke `.env`, sesuaikan PostgreSQL dan rahasia lokal, lalu ekspor nilainya. Gunakan `pnpm run db:push:backup` sebelum perubahan skema; backup PostgreSQL tersimpan di `generated-artifacts/database-backups/`, yang diabaikan Git dan deployment:
+```sh
+pnpm install --frozen-lockfile
+pnpm run db:push:backup
+pnpm --filter @workspace/api-server run seed
+```
+
+`db:push:backup` membuat backup PostgreSQL lebih dulu, lalu menerapkan skema development dengan Drizzle. Setelah itu jalankan kedua workflow di atas. `DATABASE_URL` disediakan untuk database Replit; `SESSION_SECRET` harus tersedia sebagai Replit Secret karena digunakan untuk JWT, data rekening terenkripsi, dan sesi Baileys.
+
+### Akun demo
+
+Seed development membuat `admin@demo.local` dan `customer@demo.local`, kampanye contoh draf, pengaturan awal, dan 300 kontak placeholder tanpa consent. Kata sandi bawaan seed adalah `DemoOnly2026!`; dapat diganti dengan variabel `SEED_DEMO_PASSWORD` sebelum seed dijalankan. **Jangan gunakan akun/kata sandi demo pada deployment atau untuk data nyata.** Seed menolak berjalan dengan `NODE_ENV=production`.
+
+### Lingkungan lokal
+
+Salin `.env.example` ke `.env`, isi URL PostgreSQL development dan secret development sendiri, lalu muat variabel ke shell sebelum menjalankan perintah:
 
 ```sh
 cp .env.example .env
@@ -37,28 +118,29 @@ pnpm run db:push:backup
 pnpm --filter @workspace/api-server run seed
 ```
 
-Seed hanya boleh berjalan di development. Akun demo: `admin@demo.local` dan `customer@demo.local`; kata sandi default seed `DemoOnly2026!`, atau isi `SEED_DEMO_PASSWORD` sebelum menjalankan seed. Jangan gunakan akun demo atau kata sandi default di deployment.
+Web di luar Replit memakai `PORT` dan `BASE_PATH` (umumnya `PORT=3000`, `BASE_PATH=/`); API memakai `PORT` (contoh `5000`). Jangan menaruh secret di Git. Direktori `.wa-sessions/` dan `.env` tidak untuk di-commit.
 
-Skema saat ini dikelola dengan Drizzle dan `drizzle-kit push` untuk database development. Tidak ada direktori migrasi SQL yang dilacak di repo ini.
-
-## Menghubungkan WhatsApp
-
-1. Daftar atau masuk sebagai customer.
-2. Buka **WhatsApp**, tambah satu atau lebih sesi, lalu tautkan masing-masing dengan QR atau pairing code.
-3. Tautkan perangkat dari WhatsApp pada ponsel pemilik nomor.
-4. Admin harus membuat dan mengaktifkan kampanye serta mengimpor kontak yang telah memberi persetujuan.
-5. Customer menghubungkan satu atau lebih sesi online, memilih jeda, lalu mulai blast. Semua sesi online menjadi pekerja paralel; status, QR, dan progres diperbarui melalui Socket.IO.
-
-Jangan kirim ke nomor yang tidak memberi persetujuan. Hentikan pengiriman bila penerima meminta berhenti.
-
-## Perintah pengembangan
+## Pengembangan dan pengujian
 
 ```sh
 pnpm run typecheck
-pnpm run db:push:backup
+pnpm --filter @workspace/wa-campaign run typecheck
+pnpm --filter @workspace/api-server run typecheck
+pnpm --filter @workspace/api-server run test:smoke
 pnpm run db:backup
+pnpm run db:push:backup
 pnpm --filter @workspace/api-server run seed
 pnpm --filter @workspace/api-spec run codegen
 ```
 
-Perubahan endpoint dimulai dari OpenAPI, lalu jalankan codegen sebelum memakai hook atau schema hasil generate. `drizzle-kit push` ditujukan untuk development; jangan jalankan seed pada production.
+Smoke test memeriksa route HTML, endpoint kesehatan, login/register dan rotasi token, pemisahan hak akses, CRUD kampanye, validasi impor/consent, sesi tanpa pairing, hasil/ekspor, saldo dan transisi/refund penarikan. Test menulis data QA sementara ke **database development** lalu membersihkannya. Jalankan hanya ketika kedua workflow aktif, database development dan akun demo sudah disiapkan; test menolak mode production. Test tidak memindai QR, memasangkan nomor sungguhan, maupun mengirim pesan WhatsApp.
+
+Untuk mengubah API: edit OpenAPI terlebih dahulu, jalankan codegen, lalu sesuaikan route dan client. Skema dikembangkan dengan Drizzle `push`; repo ini tidak menyimpan direktori migrasi SQL. Sebelum perubahan skema, gunakan `pnpm run db:push:backup`. Backup custom-format tersimpan di `generated-artifacts/database-backups/` (diabaikan Git/deployment); untuk memulihkan, gunakan alat PostgreSQL seperti `pg_restore` dengan database target yang benar.
+
+## Keamanan dan batas pengujian
+
+- Kata sandi di-hash dengan bcrypt. Access token berlaku 15 menit; refresh token acak berlaku tujuh hari, disimpan sebagai hash dan diputar saat refresh.
+- Nilai rekening dienkripsi dengan AES-256-GCM menggunakan kunci turunan `SESSION_SECRET`; respons customer menyamarkan nomor rekening, sedangkan admin yang berwenang dapat melihat detail untuk transfer manual.
+- Seed dan smoke test hanya untuk development. Jangan menjalankan seed/test terhadap production atau mengirim broadcast selama pengujian.
+- Pengiriman WhatsApp nyata memerlukan perangkat/nomor customer yang ditautkan, sesi online, kampanye aktif, dan kontak yang benar-benar memberi consent. Perilaku pairing jaringan dan pengiriman end-to-end perlu diuji menggunakan nomor uji yang dikendalikan pemiliknya; smoke test otomatis tidak mengirim pesan.
+- Pengelola sesi mengikuti protokol Baileys tidak resmi. Perubahan/ketidaktersediaan WhatsApp dapat memengaruhi pairing atau pengiriman dan tidak dapat disimulasikan oleh tes lokal.
