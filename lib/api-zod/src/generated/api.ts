@@ -163,7 +163,7 @@ export const ListWaSessionsResponseItem = zod.object({
   "id": zod.string(),
   "label": zod.string(),
   "phone": zod.string().nullable(),
-  "status": zod.enum(['offline', 'connecting', 'online', 'logged_out']),
+  "status": zod.enum(['offline', 'connecting', 'online', 'logged_out', 'inactive']),
   "lastConnectedAt": zod.coerce.date().nullish()
 })
 export const ListWaSessionsResponse = zod.array(ListWaSessionsResponseItem)
@@ -184,7 +184,7 @@ export const CreateWaSessionResponse = zod.object({
   "id": zod.string(),
   "label": zod.string(),
   "phone": zod.string().nullable(),
-  "status": zod.enum(['offline', 'connecting', 'online', 'logged_out']),
+  "status": zod.enum(['offline', 'connecting', 'online', 'logged_out', 'inactive']),
   "lastConnectedAt": zod.coerce.date().nullish()
 })
 
@@ -206,7 +206,7 @@ export const ConnectWaSessionResponse = zod.object({
   "id": zod.string(),
   "label": zod.string(),
   "phone": zod.string().nullable(),
-  "status": zod.enum(['offline', 'connecting', 'online', 'logged_out']),
+  "status": zod.enum(['offline', 'connecting', 'online', 'logged_out', 'inactive']),
   "lastConnectedAt": zod.coerce.date().nullish()
 }),
   "qrDataUrl": zod.string().nullable(),
@@ -222,6 +222,35 @@ export const DeleteWaSessionParams = zod.object({
 })
 
 export const DeleteWaSessionResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string()
+})
+
+
+/**
+ * @summary List every customer's WhatsApp sessions
+ */
+export const ListAdminWaSessionsResponseItem = zod.object({
+  "id": zod.string(),
+  "ownerId": zod.string(),
+  "ownerName": zod.string(),
+  "ownerEmail": zod.string(),
+  "label": zod.string(),
+  "phone": zod.string().nullable(),
+  "status": zod.enum(['offline', 'connecting', 'online', 'logged_out', 'inactive']),
+  "lastConnectedAt": zod.coerce.date().nullish()
+})
+export const ListAdminWaSessionsResponse = zod.array(ListAdminWaSessionsResponseItem)
+
+
+/**
+ * @summary Disconnect a customer's WhatsApp session
+ */
+export const DisconnectAdminWaSessionParams = zod.object({
+  "sessionId": zod.coerce.string()
+})
+
+export const DisconnectAdminWaSessionResponse = zod.object({
   "success": zod.boolean(),
   "message": zod.string()
 })
@@ -784,6 +813,7 @@ export const GetSettingsResponse = zod.object({
   "minimumWithdrawal": zod.number().int(),
   "pendingReleaseHours": zod.number().int(),
   "maxMessagesPerSessionPerHour": zod.number().int(),
+  "sessionIdleMinutes": zod.number().int(),
   "allowDisconnectRequeue": zod.boolean()
 })
 
@@ -802,6 +832,8 @@ export const updateSettingsBodyPendingReleaseHoursMax = 720;
 
 export const updateSettingsBodyMaxMessagesPerSessionPerHourMax = 60;
 
+export const updateSettingsBodySessionIdleMinutesMax = 1440;
+
 
 
 export const UpdateSettingsBody = zod.object({
@@ -810,6 +842,7 @@ export const UpdateSettingsBody = zod.object({
   "minimumWithdrawal": zod.number().int().min(updateSettingsBodyMinimumWithdrawalMin).optional(),
   "pendingReleaseHours": zod.number().int().min(updateSettingsBodyPendingReleaseHoursMin).max(updateSettingsBodyPendingReleaseHoursMax).optional(),
   "maxMessagesPerSessionPerHour": zod.number().int().min(1).max(updateSettingsBodyMaxMessagesPerSessionPerHourMax).optional(),
+  "sessionIdleMinutes": zod.number().int().min(1).max(updateSettingsBodySessionIdleMinutesMax).optional(),
   "allowDisconnectRequeue": zod.boolean().optional()
 })
 
@@ -819,6 +852,7 @@ export const UpdateSettingsResponse = zod.object({
   "minimumWithdrawal": zod.number().int(),
   "pendingReleaseHours": zod.number().int(),
   "maxMessagesPerSessionPerHour": zod.number().int(),
+  "sessionIdleMinutes": zod.number().int(),
   "allowDisconnectRequeue": zod.boolean()
 })
 

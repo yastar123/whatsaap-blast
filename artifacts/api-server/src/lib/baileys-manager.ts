@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 import pino from "pino";
 import makeWASocket, {
   DisconnectReason,
+  generateMessageIDV2,
   useMultiFileAuthState,
 } from "@whiskeysockets/baileys";
 import QRCode from "qrcode";
@@ -25,6 +26,10 @@ type LiveSession = {
 };
 
 const liveSessions = new Map<string, LiveSession>();
+const idleTimers = new Map<string, NodeJS.Timeout>();
+const reconnectTimers = new Map<string, NodeJS.Timeout>();
+const reconnectAttempts = new Map<string, number>();
+const maxReconnectAttempts = 5;
 let realtime: Server | null = null;
 const authSecret = process.env["SESSION_SECRET"];
 if (!authSecret) throw new Error("SESSION_SECRET is required for live sessions.");
@@ -36,6 +41,12 @@ const authRoot = path.resolve(
 
 const roomName = (userId: string) => `user:${userId}`;
 const sessionPath = (id: string) => path.join(authRoot, id);
+
+function clearSocketListeners(socket: LiveSession["socket"]): void {
+  socket.ev.removeAllListeners("connection.update");
+  socket.ev.removeAllListeners("creds.update");
+  socket.ev.removeAllListeners("messages.upsert");
+}
 
 export function attachRealtime(io: Server): void {
   realtime = io;
@@ -91,10 +102,66 @@ function statusFromDisconnect(error: unknown): number | null {
   return typeof statusCode === "number" ? statusCode : null;
 }
 
+function isTransientSendError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const code = Reflect.get(error, "code");
+  if (
+    typeof code === "string" &&
+    [
+      "ECONNRESET",
+      "ETIMEDOUT",
+      "EPIPE",
+      "ENETUNREACH",
+      "EHOSTUNREACH",
+      "ECONNABORTED",
+      "EAI_AGAIN",
+    ].includes(code)
+  ) {
+    return true;
+  }
+  const statusCode = statusFromDisconnect(error);
+  if (statusCode === 408 || statusCode === 429 || (statusCode ?? 0) >= 500) {
+    return true;
+  }
+  const message = Reflect.get(error, "message");
+  return (
+    typeof message === "string" &&
+    /connection closed|socket closed|network|timed? ?out|temporarily unavailable/i.test(
+      message,
+    )
+  );
+}
+
+export function isWhatsAppConnectionError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const code = Reflect.get(error, "code");
+  if (
+    typeof code === "string" &&
+    [
+      "ECONNRESET",
+      "ETIMEDOUT",
+      "EPIPE",
+      "ENETUNREACH",
+      "EHOSTUNREACH",
+      "ECONNABORTED",
+      "EAI_AGAIN",
+    ].includes(code)
+  ) {
+    return true;
+  }
+  const message = Reflect.get(error, "message");
+  return (
+    typeof message === "string" &&
+    /connection closed|socket closed|socket is not open|websocket closed|not connected/i.test(
+      message,
+    )
+  );
+}
+
 async function updateSession(
   sessionId: string,
   userId: string,
-  status: "offline" | "connecting" | "online" | "logged_out",
+  status: "offline" | "connecting" | "online" | "logged_out" | "inactive",
   phone?: string | null,
 ): Promise<void> {
   await db
@@ -106,6 +173,45 @@ async function updateSession(
     })
     .where(and(eq(waSessionsTable.id, sessionId), eq(waSessionsTable.userId, userId)));
   publish(userId, "wa:status", { sessionId, status, phone: phone ?? null });
+}
+
+export function markSessionInUse(sessionId: string): void {
+  const timer = idleTimers.get(sessionId);
+  if (timer) clearTimeout(timer);
+  idleTimers.delete(sessionId);
+}
+
+export function scheduleSessionIdleExpiry(
+  sessionId: string,
+  userId: string,
+  idleMinutes: number,
+): void {
+  markSessionInUse(sessionId);
+  const live = liveSessions.get(sessionId);
+  if (!live || live.userId !== userId) return;
+
+  const timer = setTimeout(() => {
+    void (async () => {
+      if (idleTimers.get(sessionId) !== timer) return;
+      idleTimers.delete(sessionId);
+      if (liveSessions.get(sessionId) !== live) return;
+
+      const reconnectTimer = reconnectTimers.get(sessionId);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      reconnectTimers.delete(sessionId);
+      reconnectAttempts.delete(sessionId);
+      liveSessions.delete(sessionId);
+      clearSocketListeners(live.socket);
+      live.socket.end(new Error("WhatsApp session expired after inactivity."));
+      await rm(sessionPath(sessionId), { recursive: true, force: true });
+      await updateSession(sessionId, userId, "inactive");
+      logger.info({ sessionId, userId }, "WhatsApp session expired after inactivity");
+    })().catch((error: unknown) => {
+      logger.error({ sessionId, userId, error }, "Could not expire idle WhatsApp session");
+    });
+  }, idleMinutes * 60_000);
+  timer.unref();
+  idleTimers.set(sessionId, timer);
 }
 
 function messageText(message: Record<string, unknown>): string {
@@ -244,6 +350,7 @@ async function startSocket(
     }
     if (update.connection === "open") {
       live.qrDataUrl = null;
+      reconnectAttempts.delete(sessionId);
       const phone = socket.user?.id.split(":")[0]?.split("@")[0] ?? null;
       await updateSession(sessionId, userId, "online", phone);
       finishAuthSetup();
@@ -253,21 +360,41 @@ async function startSocket(
 
     const statusCode = statusFromDisconnect(update.lastDisconnect?.error);
     const loggedOut = statusCode === DisconnectReason.loggedOut;
+    const isCurrent = liveSessions.get(sessionId) === live;
     await updateSession(sessionId, userId, loggedOut ? "logged_out" : "offline");
     finishAuthSetup();
-    if (liveSessions.get(sessionId) !== live || loggedOut) {
-      if (liveSessions.get(sessionId) === live) liveSessions.delete(sessionId);
+    clearSocketListeners(socket);
+    if (!isCurrent || loggedOut) {
+      if (isCurrent) liveSessions.delete(sessionId);
+      if (loggedOut) {
+        reconnectAttempts.delete(sessionId);
+        await rm(sessionPath(sessionId), { recursive: true, force: true });
+      }
       return;
     }
 
+    const nextAttempt = (reconnectAttempts.get(sessionId) ?? 0) + 1;
+    if (nextAttempt > maxReconnectAttempts) {
+      liveSessions.delete(sessionId);
+      reconnectAttempts.delete(sessionId);
+      logger.warn({ sessionId, userId }, "WhatsApp reconnect limit reached");
+      return;
+    }
+    reconnectAttempts.set(sessionId, nextAttempt);
     const waitMs =
-      statusCode === DisconnectReason.restartRequired ? 250 : 5_000;
-    setTimeout(() => {
+      statusCode === DisconnectReason.restartRequired
+        ? 250
+        : Math.min(5_000 * 2 ** (nextAttempt - 1), 60_000);
+    const reconnectTimer = setTimeout(() => {
+      if (reconnectTimers.get(sessionId) !== reconnectTimer) return;
+      reconnectTimers.delete(sessionId);
       if (liveSessions.get(sessionId) !== live) return;
       void startSocket(sessionId, userId).catch((error: unknown) => {
         logger.warn({ sessionId, error }, "Could not reconnect WhatsApp session");
       });
     }, waitMs);
+    reconnectTimer.unref();
+    reconnectTimers.set(sessionId, reconnectTimer);
   });
   socket.ev.on("messages.upsert", async ({ messages }) => {
     for (const message of messages) {
@@ -304,7 +431,13 @@ export async function connectWaSession(
   if (!session) return null;
 
   const existing = liveSessions.get(sessionId);
+  markSessionInUse(sessionId);
+  const reconnectTimer = reconnectTimers.get(sessionId);
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimers.delete(sessionId);
+  reconnectAttempts.delete(sessionId);
   if (existing) {
+    clearSocketListeners(existing.socket);
     existing.socket.end(new Error("Connection restarted by account owner."));
     liveSessions.delete(sessionId);
   }
@@ -332,9 +465,15 @@ export async function disconnectWaSession(
     .where(and(eq(waSessionsTable.id, sessionId), eq(waSessionsTable.userId, userId)))
     .limit(1);
   if (!session) return false;
+  markSessionInUse(sessionId);
+  const reconnectTimer = reconnectTimers.get(sessionId);
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimers.delete(sessionId);
+  reconnectAttempts.delete(sessionId);
   const live = liveSessions.get(sessionId);
   if (live) {
     liveSessions.delete(sessionId);
+    clearSocketListeners(live.socket);
     live.socket.end(new Error("Connection closed by account owner."));
   }
   await updateSession(sessionId, userId, "offline");
@@ -352,7 +491,13 @@ export async function sendWhatsAppMessage(
   userId: string,
   expectedSessionPhone: string,
   recipientPhone: string,
-  content: { text: string; imageUrl?: string | null; ctaUrl?: string | null },
+  content: {
+    text: string;
+    imageUrl?: string | null;
+    ctaText?: string | null;
+    ctaUrl?: string | null;
+  },
+  signal?: AbortSignal,
 ) {
   const socket = getLiveSocket(sessionId, userId);
   if (!socket || !socket.user) throw new Error("WhatsApp session is offline.");
@@ -365,28 +510,61 @@ export async function sendWhatsAppMessage(
   }
   const number = normalizePhone(recipientPhone);
   if (number.length < 8) throw new Error("Nomor penerima tidak valid.");
+  const ctaFallback = [content.ctaText?.trim(), content.ctaUrl?.trim()]
+    .filter((part): part is string => Boolean(part))
+    .join(": ");
   const text =
     content.text +
-    (content.ctaUrl ? `\n\n${content.ctaUrl}` : "") +
+    (ctaFallback ? `\n\n${ctaFallback}` : "") +
     "\n\nBalas BERHENTI untuk berhenti menerima pesan.";
   const jid = `${number}@s.whatsapp.net`;
-  if (content.imageUrl) {
-    const result = await socket.sendMessage(jid, {
-      image: { url: content.imageUrl },
-      caption: text,
-    });
-    return result?.key.id ?? null;
+  const messageId = generateMessageIDV2(socket.user.id);
+  const messageContent = content.imageUrl
+    ? { image: { url: content.imageUrl }, caption: text }
+    : { text };
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let sendSocket = socket;
+    if (attempt > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 750));
+      if (signal?.aborted) throw lastError;
+      const reconnectedSocket = getLiveSocket(sessionId, userId);
+      if (!reconnectedSocket?.user) throw lastError;
+      const reconnectedSender = normalizePhone(
+        reconnectedSocket.user.id.split(":")[0]?.split("@")[0] ?? "",
+      );
+      if (reconnectedSender !== expectedSender) {
+        throw new Error("Nomor WhatsApp aktif tidak cocok dengan sesi yang ditugaskan.");
+      }
+      sendSocket = reconnectedSocket;
+    }
+    try {
+      const result = await sendSocket.sendMessage(jid, messageContent, {
+        messageId,
+      });
+      return result?.key.id ?? null;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 0 && isTransientSendError(error)) continue;
+      throw error;
+    }
   }
-  const result = await socket.sendMessage(jid, { text });
-  return result?.key.id ?? null;
+  return null;
 }
 
 export async function stopAllLiveSessions(): Promise<void> {
   const live = [...liveSessions.values()];
   liveSessions.clear();
+  for (const timer of idleTimers.values()) clearTimeout(timer);
+  for (const timer of reconnectTimers.values()) clearTimeout(timer);
+  idleTimers.clear();
+  reconnectTimers.clear();
+  reconnectAttempts.clear();
   await Promise.all(
     live.map(async ({ socket }) => {
       try {
+        clearSocketListeners(socket);
         socket.end(new Error("API server shutting down."));
       } catch (error) {
         logger.warn({ error }, "Could not stop WhatsApp socket cleanly");

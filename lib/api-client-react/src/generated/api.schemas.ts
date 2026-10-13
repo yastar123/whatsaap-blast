@@ -136,6 +136,7 @@ export const WaSessionStatus = {
   connecting: 'connecting',
   online: 'online',
   logged_out: 'logged_out',
+  inactive: 'inactive',
 } as const;
 
 export interface WaSession {
@@ -144,6 +145,30 @@ export interface WaSession {
   /** @nullable */
   phone: string | null;
   status: WaSessionStatus;
+  /** @nullable */
+  lastConnectedAt?: string | null;
+}
+
+export type AdminWaSessionStatus = typeof AdminWaSessionStatus[keyof typeof AdminWaSessionStatus];
+
+
+export const AdminWaSessionStatus = {
+  offline: 'offline',
+  connecting: 'connecting',
+  online: 'online',
+  logged_out: 'logged_out',
+  inactive: 'inactive',
+} as const;
+
+export interface AdminWaSession {
+  id: string;
+  ownerId: string;
+  ownerName: string;
+  ownerEmail: string;
+  label: string;
+  /** @nullable */
+  phone: string | null;
+  status: AdminWaSessionStatus;
   /** @nullable */
   lastConnectedAt?: string | null;
 }
@@ -509,6 +534,7 @@ export interface AppSettings {
   minimumWithdrawal: number;
   pendingReleaseHours: number;
   maxMessagesPerSessionPerHour: number;
+  sessionIdleMinutes: number;
   allowDisconnectRequeue: boolean;
 }
 
@@ -529,6 +555,11 @@ export interface SettingsUpdate {
      * @maximum 60
      */
   maxMessagesPerSessionPerHour?: number;
+  /**
+     * @minimum 1
+     * @maximum 1440
+     */
+  sessionIdleMinutes?: number;
   allowDisconnectRequeue?: boolean;
 }
 

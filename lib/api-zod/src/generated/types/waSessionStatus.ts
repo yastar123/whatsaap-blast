@@ -14,4 +14,5 @@ export const WaSessionStatus = {
   connecting: 'connecting',
   online: 'online',
   logged_out: 'logged_out',
+  inactive: 'inactive',
 } as const;

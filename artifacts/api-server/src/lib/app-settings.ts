@@ -7,6 +7,7 @@ export type AppSettings = {
   minimumWithdrawal: number;
   pendingReleaseHours: number;
   maxMessagesPerSessionPerHour: number;
+  sessionIdleMinutes: number;
   allowDisconnectRequeue: boolean;
 };
 
@@ -16,6 +17,7 @@ export const defaultSettings: AppSettings = {
   minimumWithdrawal: 15000,
   pendingReleaseHours: 24,
   maxMessagesPerSessionPerHour: 30,
+  sessionIdleMinutes: 10,
   allowDisconnectRequeue: true,
 };
 

@@ -396,7 +396,7 @@ a { color: inherit; text-decoration: none; }
 .status-online,.status-active,.status-sent,.status-approved,.status-paid,.status-completed { background:#e8f4ec; color:#3a805b; }
 .status-running,.status-pending,.status-connecting { background:#fff3de; color:#a87931; }
 .status-failed,.status-blocked,.status-rejected,.status-opted_out { background:#faeae7; color:#a95c4e; }
-.status-offline,.status-logged_out,.status-unsent,.status-draft,.status-paused,.status-cancelled { background:#efeee9; color:#777a72; }
+.status-offline,.status-inactive,.status-logged_out,.status-unsent,.status-draft,.status-paused,.status-cancelled { background:#efeee9; color:#777a72; }
 .metrics-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 13px; margin-bottom: 17px; }
 .metric-card { position: relative; min-height: 128px; background: #fff; border: 1px solid #e7e4da; border-radius: 8px; padding: 16px 15px 13px; }
 .metric-icon { float: right; width: 30px; height: 30px; display:grid; place-items:center; border-radius:8px; color:#647871; background:#eef1eb; }
@@ -581,7 +581,7 @@ tbody tr:last-child td { border-bottom:0; }
 .transaction-amount { color:#4c8765; font:700 12px var(--app-font-mono); }.transaction-amount.amount-out { color:#a86b5b; }
 .referral-hero { background:#eee9d9; border:1px solid #e4deca; min-height:190px; border-radius:9px; padding:22px 25px; display:flex; align-items:center; justify-content:space-between; position:relative; overflow:hidden; margin-bottom:16px; }
 .referral-copy { z-index:1; }.referral-copy h2 { font:750 21px var(--app-font-serif); letter-spacing:-.6px; line-height:1.25; margin:9px 0 5px; color:#414940; }.referral-copy p { font-size:9px;color:#858b7e;max-width:310px;line-height:1.5; }
-.referral-code { background:#fffefa; border:1px solid #e2dece; border-radius:7px; padding:13px 16px; min-width:190px; z-index:1; }.referral-code span { display:block;color:#95968a;font:8px var(--app-font-mono);letter-spacing:.6px; }.referral-code b { display:block;font:700 18px var(--app-font-mono);color:#3e7256;letter-spacing:1px;margin:7px 0; }.referral-code button { border:0;background:none;color:#60836a;display:flex;align-items:center;gap:5px;font-size:8px;padding:0; }
+.referral-code { background:#fffefa; border:1px solid #e2dece; border-radius:7px; padding:13px 16px; min-width:190px; z-index:1; }.referral-code span { display:block;color:#95968a;font:8px var(--app-font-mono);letter-spacing:.6px; }.referral-code b { display:block;font:700 18px var(--app-font-mono);color:#3e7256;letter-spacing:1px;margin:7px 0; }.referral-code button { border:0;background:none;color:#60836a;display:flex;align-items:center;gap:5px;font-size:8px;padding:0; }.referral-link { display:block; max-width:290px; margin:0 0 9px; overflow-wrap:anywhere; color:#60836a; font:8px var(--app-font-mono); }
 .referral-decoration { position:absolute; width:160px;height:160px; border:1px solid #d9d4c2; border-radius:50%; right:25%; display:grid;place-items:center;color:#9dac8f; box-shadow:0 0 0 22px rgba(255,255,255,.14),0 0 0 45px rgba(255,255,255,.1); }
 .downline-name,.customer-cell { display:flex; align-items:center; gap:8px; }.money-cell { color:#528263; font-family:var(--app-font-mono); font-weight:600; }
 .withdrawal-layout { display:grid;grid-template-columns:minmax(280px,.85fr) minmax(0,1.45fr);gap:16px;align-items:start; }
@@ -822,7 +822,7 @@ body { background: #0b0d10; color: #e6e8eb; }
 .status-online,.status-active,.status-sent,.status-approved,.status-paid,.status-completed { background: #14271f; color: #62dda0; }
 .status-running,.status-pending,.status-connecting { background: #2b2416; color: #f0c46b; }
 .status-failed,.status-blocked,.status-rejected,.status-opted_out { background: #301a1b; color: #ff928a; }
-.status-offline,.status-logged_out,.status-unsent,.status-draft,.status-paused,.status-cancelled { background: #20242a; color: #929aa5; }
+.status-offline,.status-inactive,.status-logged_out,.status-unsent,.status-draft,.status-paused,.status-cancelled { background: #20242a; color: #929aa5; }
 .metric-icon { color: #a2acb7; background: #20252c; }
 .metric-icon.mint { color: #3dd68c; background: #14271f; }
 .metric-icon.gold { color: #f0c46b; background: #2b2416; }
@@ -914,7 +914,7 @@ td { color: #b3bac3; border-color: #232830; }
 .referral-copy p { color: #a0a7b1; }
 .referral-code { background: #101318; border-color: #303640; }
 .referral-code span { color: #8a919c; }
-.referral-code b,.referral-code button { color: #3dd68c; }
+.referral-code b,.referral-code button,.referral-link { color: #3dd68c; }
 .referral-decoration { border-color: #303740; color: #718679; box-shadow: 0 0 0 22px rgba(230,232,235,.025),0 0 0 45px rgba(230,232,235,.018); }
 .withdrawal-form-head p,.withdrawal-form label small { color: #8a919c; }
 .available-balance { background: #171d19; border-color: #2c4033; }

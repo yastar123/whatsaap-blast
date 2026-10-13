@@ -23,5 +23,10 @@ export interface SettingsUpdate {
      * @maximum 60
      */
   maxMessagesPerSessionPerHour?: number;
+  /**
+     * @minimum 1
+     * @maximum 1440
+     */
+  sessionIdleMinutes?: number;
   allowDisconnectRequeue?: boolean;
 }

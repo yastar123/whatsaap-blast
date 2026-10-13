@@ -22,6 +22,7 @@ import type {
 import type {
   ActionResult,
   ActiveCampaignResponse,
+  AdminWaSession,
   AppSettings,
   AuthResponse,
   BlastJob,
@@ -984,6 +985,157 @@ export const useDeleteWaSession = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteWaSessionMutationOptions(options));
+    }
+
+export const getListAdminWaSessionsUrl = () => {
+
+
+
+
+  return `/api/admin/wa-sessions`
+}
+
+/**
+ * @summary List every customer's WhatsApp sessions
+ */
+export const listAdminWaSessions = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminWaSession[]> => {
+
+  return customFetch<AdminWaSession[]>(getListAdminWaSessionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminWaSessionsQueryKey = () => {
+    return [
+    `/api/admin/wa-sessions`
+    ] as const;
+    }
+
+
+export const getListAdminWaSessionsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminWaSessions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminWaSessions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminWaSessionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminWaSessions>>> = ({ signal }) => listAdminWaSessions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminWaSessions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminWaSessionsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminWaSessions>>>
+export type ListAdminWaSessionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List every customer's WhatsApp sessions
+ */
+
+export function useListAdminWaSessions<TData = Awaited<ReturnType<typeof listAdminWaSessions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminWaSessions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminWaSessionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDisconnectAdminWaSessionUrl = (sessionId: string,) => {
+
+
+
+
+  return `/api/admin/wa-sessions/${sessionId}`
+}
+
+/**
+ * @summary Disconnect a customer's WhatsApp session
+ */
+export const disconnectAdminWaSession = async (sessionId: string, options?: Parameters<typeof customFetch>[1]): Promise<ActionResult> => {
+
+  return customFetch<ActionResult>(getDisconnectAdminWaSessionUrl(sessionId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDisconnectAdminWaSessionMutationKey = () => ['disconnectAdminWaSession'] as const;
+
+export const getDisconnectAdminWaSessionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disconnectAdminWaSession>>, TError,DisconnectAdminWaSessionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof disconnectAdminWaSession>>, TError,DisconnectAdminWaSessionMutationVariables, TContext> => {
+
+const mutationKey = getDisconnectAdminWaSessionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof disconnectAdminWaSession>>, DisconnectAdminWaSessionMutationVariables> = (props) => {
+          const {sessionId} = props ?? {};
+
+          return  disconnectAdminWaSession(sessionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DisconnectAdminWaSessionMutationResult = NonNullable<Awaited<ReturnType<typeof disconnectAdminWaSession>>>
+
+    export type DisconnectAdminWaSessionMutationError = ErrorType<unknown>
+    export type DisconnectAdminWaSessionMutationVariables = {sessionId: string}
+
+    /**
+ * @summary Disconnect a customer's WhatsApp session
+ */
+export const useDisconnectAdminWaSession = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disconnectAdminWaSession>>, TError,DisconnectAdminWaSessionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof disconnectAdminWaSession>>,
+        TError,
+        DisconnectAdminWaSessionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDisconnectAdminWaSessionMutationOptions(options));
     }
 
 export const getGetActiveCampaignUrl = () => {

@@ -12,5 +12,6 @@ export interface AppSettings {
   minimumWithdrawal: number;
   pendingReleaseHours: number;
   maxMessagesPerSessionPerHour: number;
+  sessionIdleMinutes: number;
   allowDisconnectRequeue: boolean;
 }

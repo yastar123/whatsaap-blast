@@ -1,7 +1,13 @@
 import { and, count, eq, gte, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { db, pool, campaignsTable, contactsTable, blastJobsTable, blastJobSessionsTable, transactionsTable, usersTable, waSessionsTable } from "@workspace/db";
 import { logger } from "./logger";
-import { publishUserEvent, sendWhatsAppMessage } from "./baileys-manager";
+import {
+  isWhatsAppConnectionError,
+  markSessionInUse,
+  publishUserEvent,
+  scheduleSessionIdleExpiry,
+  sendWhatsAppMessage,
+} from "./baileys-manager";
 import { getAppSettings } from "./app-settings";
 
 const activeRuns = new Map<
@@ -64,7 +70,8 @@ async function claimNextContact(
     }
     const updated = await client.query(
       `UPDATE contacts
-       SET status = 'pending', locked_by_user_id = $2, locked_at = NOW(), wa_session_id = $3
+       SET status = 'pending', locked_by_user_id = $2, locked_at = NOW(),
+           wa_session_id = $3, wa_sender_phone = NULL, error_reason = NULL
        WHERE id = $1
        RETURNING id, phone`,
       [contactId, userId, sessionId],
@@ -101,6 +108,8 @@ async function releaseLocks(userId: string, sessionId: string): Promise<void> {
       lockedByUserId: null,
       lockedAt: null,
       waSessionId: null,
+      waSenderPhone: null,
+      errorReason: null,
     })
     .where(
       and(
@@ -201,6 +210,14 @@ async function finishBlast(
     })
     .where(and(eq(blastJobsTable.id, jobId), eq(blastJobsTable.status, "running")));
   await settleRunningBalance(jobId, userId);
+  const settings = await getAppSettings();
+  for (const worker of workerRows) {
+    scheduleSessionIdleExpiry(
+      worker.waSessionId,
+      userId,
+      settings.sessionIdleMinutes,
+    );
+  }
   activeRuns.delete(jobId);
   await updateProgress(jobId, userId);
 }
@@ -300,22 +317,79 @@ async function runBlast(
           session.phone ?? "",
           contact.phone,
           {
-          text: campaign.messageText,
-          imageUrl: campaign.imageUrl,
-          ctaUrl: campaign.ctaUrl,
+            text: campaign.messageText,
+            imageUrl: campaign.imageUrl,
+            ctaText: campaign.ctaText,
+            ctaUrl: campaign.ctaUrl,
           },
+          controller.signal,
         );
         if (!messageId) throw new Error("WhatsApp tidak mengembalikan ID pesan.");
       } catch (error) {
         const message =
           error instanceof Error ? error.message.slice(0, 240) : "Pengiriman gagal.";
+        let [latestSession] = await db
+          .select({ status: waSessionsTable.status })
+          .from(waSessionsTable)
+          .where(
+            and(
+              eq(waSessionsTable.id, sessionId),
+              eq(waSessionsTable.userId, userId),
+            ),
+          )
+          .limit(1);
+        if (
+          !controller.signal.aborted &&
+          settings.allowDisconnectRequeue &&
+          isWhatsAppConnectionError(error) &&
+          latestSession?.status === "online"
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 150));
+          [latestSession] = await db
+            .select({ status: waSessionsTable.status })
+            .from(waSessionsTable)
+            .where(
+              and(
+                eq(waSessionsTable.id, sessionId),
+                eq(waSessionsTable.userId, userId),
+              ),
+            )
+            .limit(1);
+        }
+        if (
+          controller.signal.aborted ||
+          (settings.allowDisconnectRequeue &&
+            (!latestSession || latestSession.status !== "online"))
+        ) {
+          await db
+            .update(contactsTable)
+            .set({
+              status: "unsent",
+              lockedByUserId: null,
+              lockedAt: null,
+              waSessionId: null,
+              waSenderPhone: null,
+              errorReason: null,
+            })
+            .where(
+              and(
+                eq(contactsTable.id, contact.id),
+                eq(contactsTable.status, "pending"),
+                isNull(contactsTable.messageId),
+              ),
+            );
+          if (!controller.signal.aborted) await releaseLocks(userId, sessionId);
+          sessionStatus = controller.signal.aborted ? "cancelled" : "offline";
+          await updateProgress(jobId, userId);
+          break;
+        }
         await db.transaction(async (tx) => {
           await tx
             .update(contactsTable)
             .set({
               status: "failed",
               errorReason: message,
-              lockedByUserId: null,
+              waSenderPhone: session.phone,
               lockedAt: null,
             })
             .where(eq(contactsTable.id, contact.id));
@@ -369,7 +443,6 @@ async function runBlast(
             sentAt: new Date(),
             waSenderPhone: session.phone,
             errorReason: null,
-            lockedByUserId: null,
             lockedAt: null,
           })
           .where(
@@ -599,6 +672,16 @@ export async function startBlast(
     void done.catch((error: unknown) => {
       logger.error({ jobId: job.id, error }, "Could not finalize blast");
     });
+    for (const session of sessions) markSessionInUse(session.id);
+  } else {
+    const settings = await getAppSettings();
+    for (const session of sessions) {
+      scheduleSessionIdleExpiry(
+        session.id,
+        userId,
+        settings.sessionIdleMinutes,
+      );
+    }
   }
   return (await getBlastJobProgress(job.id)) ?? job;
 }

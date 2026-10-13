@@ -206,6 +206,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ActionResult"
+  /admin/wa-sessions:
+    get:
+      operationId: listAdminWaSessions
+      tags: [admin]
+      summary: List every customer's WhatsApp sessions
+      responses:
+        "200":
+          description: All WhatsApp sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminWaSession"
+  /admin/wa-sessions/{sessionId}:
+    delete:
+      operationId: disconnectAdminWaSession
+      tags: [admin]
+      summary: Disconnect a customer's WhatsApp session
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Session disconnected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
   /campaigns/active:
     get:
       operationId: getActiveCampaign
@@ -746,9 +777,21 @@ components:
         id: { type: string }
         label: { type: string }
         phone: { type: ["string", "null"] }
-        status: { type: string, enum: [offline, connecting, online, logged_out] }
+        status: { type: string, enum: [offline, connecting, online, logged_out, inactive] }
         lastConnectedAt: { type: ["string", "null"], format: date-time }
       required: [id, label, phone, status]
+    AdminWaSession:
+      type: object
+      properties:
+        id: { type: string }
+        ownerId: { type: string }
+        ownerName: { type: string }
+        ownerEmail: { type: string }
+        label: { type: string }
+        phone: { type: ["string", "null"] }
+        status: { type: string, enum: [offline, connecting, online, logged_out, inactive] }
+        lastConnectedAt: { type: ["string", "null"], format: date-time }
+      required: [id, ownerId, ownerName, ownerEmail, label, phone, status]
     WaSessionInput:
       type: object
       properties:
@@ -1021,8 +1064,9 @@ components:
         minimumWithdrawal: { type: integer }
         pendingReleaseHours: { type: integer }
         maxMessagesPerSessionPerHour: { type: integer }
+        sessionIdleMinutes: { type: integer }
         allowDisconnectRequeue: { type: boolean }
-      required: [perMessage, referralBonus, minimumWithdrawal, pendingReleaseHours, maxMessagesPerSessionPerHour, allowDisconnectRequeue]
+      required: [perMessage, referralBonus, minimumWithdrawal, pendingReleaseHours, maxMessagesPerSessionPerHour, sessionIdleMinutes, allowDisconnectRequeue]
     SettingsUpdate:
       type: object
       properties:
@@ -1031,5 +1075,6 @@ components:
         minimumWithdrawal: { type: integer, minimum: 15000 }
         pendingReleaseHours: { type: integer, minimum: 0, maximum: 720 }
         maxMessagesPerSessionPerHour: { type: integer, minimum: 1, maximum: 60 }
+        sessionIdleMinutes: { type: integer, minimum: 1, maximum: 1440 }
         allowDisconnectRequeue: { type: boolean }
 

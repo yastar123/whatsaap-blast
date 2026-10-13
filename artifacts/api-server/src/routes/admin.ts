@@ -12,6 +12,8 @@ import {
 import {
   ActivateCampaignParams,
   ActivateCampaignResponse,
+  DisconnectAdminWaSessionParams,
+  DisconnectAdminWaSessionResponse,
   CreateCampaignBody,
   CreateCampaignResponse,
   DeleteCampaignParams,
@@ -20,6 +22,7 @@ import {
   DeleteContactResponse,
   ImportContactsBody,
   ImportContactsResponse,
+  ListAdminWaSessionsResponse,
   ListCampaignsResponse,
   ListContactsQueryParams,
   ListContactsResponse,
@@ -44,6 +47,7 @@ import {
 } from "@workspace/db";
 import { getAppSettings, saveAppSettings } from "../lib/app-settings";
 import { requireAdmin, requireAuth } from "../lib/auth";
+import { disconnectWaSession } from "../lib/baileys-manager";
 
 const router: IRouter = Router();
 router.use("/admin", requireAuth, requireAdmin);
@@ -416,6 +420,58 @@ router.patch("/admin/users/:userId/status", async (req, res): Promise<void> => {
     }),
   );
 });
+
+router.get("/admin/wa-sessions", async (_req, res): Promise<void> => {
+  const sessions = await db
+    .select({
+      id: waSessionsTable.id,
+      ownerId: usersTable.id,
+      ownerName: usersTable.name,
+      ownerEmail: usersTable.email,
+      label: waSessionsTable.label,
+      phone: waSessionsTable.phone,
+      status: waSessionsTable.status,
+      lastConnectedAt: waSessionsTable.lastConnectedAt,
+    })
+    .from(waSessionsTable)
+    .innerJoin(usersTable, eq(waSessionsTable.userId, usersTable.id))
+    .orderBy(desc(waSessionsTable.createdAt));
+  res.json(ListAdminWaSessionsResponse.parse(sessions));
+});
+
+router.delete(
+  "/admin/wa-sessions/:sessionId",
+  async (req, res): Promise<void> => {
+    const params = DisconnectAdminWaSessionParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [session] = await db
+      .select({ id: waSessionsTable.id, userId: waSessionsTable.userId })
+      .from(waSessionsTable)
+      .where(eq(waSessionsTable.id, params.data.sessionId))
+      .limit(1);
+    if (!session) {
+      res.status(404).json({ error: "Sesi WhatsApp tidak ditemukan." });
+      return;
+    }
+    const disconnected = await disconnectWaSession(
+      session.id,
+      session.userId,
+    );
+    if (!disconnected) {
+      res.status(404).json({ error: "Sesi WhatsApp tidak ditemukan." });
+      return;
+    }
+    res.json(
+      DisconnectAdminWaSessionResponse.parse({
+        success: true,
+        message: "Sesi WhatsApp berhasil diputus.",
+      }),
+    );
+  },
+);
 
 router.get("/admin/settings", async (_req, res): Promise<void> => {
   res.json(await getAppSettings());

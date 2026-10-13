@@ -15,10 +15,12 @@ import {
   getGetCurrentBlastQueryKey, getListCampaignsQueryKey, getListContactsQueryKey,
   getListResultsQueryKey, getGetResultsSummaryQueryKey, getListCampaignResultSummariesQueryKey,
   getListWaSessionsQueryKey, getListUsersQueryKey, getListWithdrawalsQueryKey,
+  getListAdminWaSessionsQueryKey,
   useGetCurrentUser, useGetDashboardOverview, useGetSettings, useGetWallet, useGetReferrals,
   useGetActiveCampaign, useGetCurrentBlast, useListCampaigns, useListContacts, useListResults,
   useGetResultsSummary, useListCampaignResultSummaries, useListWaSessions, useListUsers,
-  useListWithdrawals, useLogin, useRegister, useLogout, useCreateWaSession, useConnectWaSession,
+  useListWithdrawals, useListAdminWaSessions, useDisconnectAdminWaSession,
+  useLogin, useRegister, useLogout, useCreateWaSession, useConnectWaSession,
   useDeleteWaSession, useCreateCampaign, useUpdateCampaign, useDeleteCampaign, useActivateCampaign,
   useImportContacts, useDeleteContact, useStartBlast, useCancelBlast, useRequestWithdrawal,
   useUpdateWithdrawal, useUpdateUserStatus, useUpdateSettings, setAuthTokenGetter
@@ -37,7 +39,7 @@ const date = (value?: string | null) => value ? new Intl.DateTimeFormat('id-ID',
 const navGroups = [
   { title: 'Ruang kerja', links: [{ href: '/', label: 'Ringkasan', icon: LayoutDashboard }, { href: '/whatsapp', label: 'WhatsApp', icon: Smartphone }, { href: '/blast', label: 'Kirim kampanye', icon: Send }, { href: '/results', label: 'Hasil pengiriman', icon: BarChart3 }] },
   { title: 'Keuangan', links: [{ href: '/wallet', label: 'Dompet', icon: WalletIcon }, { href: '/referrals', label: 'Referral', icon: Users }, { href: '/withdrawals', label: 'Penarikan', icon: CreditCard }] },
-  { title: 'Administrasi', links: [{ href: '/campaigns', label: 'Kampanye', icon: Blocks, admin: true }, { href: '/contacts', label: 'Kontak & consent', icon: ClipboardList, admin: true }, { href: '/customers', label: 'Akun pengirim', icon: UserRound, admin: true }, { href: '/settings', label: 'Pengaturan', icon: Settings2, admin: true }] },
+  { title: 'Administrasi', links: [{ href: '/campaigns', label: 'Kampanye', icon: Blocks, admin: true }, { href: '/contacts', label: 'Kontak & consent', icon: ClipboardList, admin: true }, { href: '/customers', label: 'Akun pengirim', icon: UserRound, admin: true }, { href: '/admin/sessions', label: 'Sesi semua pengirim', icon: Smartphone, admin: true }, { href: '/settings', label: 'Pengaturan', icon: Settings2, admin: true }] },
 ];
 const titles: Record<string, [string, string]> = {
   '/': ['Ringkasan operasi', 'Pantau kampanye, sesi, dan arus pengiriman.'],
@@ -50,6 +52,7 @@ const titles: Record<string, [string, string]> = {
   '/campaigns': ['Kampanye', 'Kelola naskah dan pilih kampanye aktif.'],
   '/contacts': ['Kontak & consent', 'Impor hanya kontak dengan bukti persetujuan.'],
   '/customers': ['Akun pengirim', 'Kelola akses akun customer.'],
+  '/admin/sessions': ['Sesi semua pengirim', 'Pantau dan putuskan sesi WhatsApp milik customer.'],
   '/settings': ['Pengaturan bisnis', 'Atur tarif dan batas operasional.'],
 };
 
@@ -69,7 +72,7 @@ function Shell() {
   if (isLoading) return <div className="loading-screen"><div className="skeleton brand-skeleton" /><div className="skeleton line-skeleton" /><div className="skeleton content-skeleton" /></div>;
   if (isError || !user) return <AuthPage mode="login" />;
   const currentTitle = titles[path] || ['Halaman tidak ditemukan', ''];
-  const shownGroups = navGroups.map(group => ({ ...group, links: group.links.filter(link => user.role === 'admin' || !['/campaigns', '/contacts', '/customers', '/settings'].includes(link.href)) })).filter(group => group.links.length);
+  const shownGroups = navGroups.map(group => ({ ...group, links: group.links.filter(link => user.role === 'admin' || !['/campaigns', '/contacts', '/customers', '/admin/sessions', '/settings'].includes(link.href)) })).filter(group => group.links.length);
   return <div className="app-shell">
     <aside className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
       <Link href="/" className="brand-lockup"><span className="brand-mark"><MessageCircle size={19} /></span><span><b>titip<span>kirim</span></b><small>OPERATIONS DESK</small></span></Link>
@@ -92,6 +95,7 @@ function Shell() {
           <Route path="/campaigns">{user.role === 'admin' ? <CampaignsPage /> : <Forbidden />}</Route>
           <Route path="/contacts">{user.role === 'admin' ? <ContactsPage /> : <Forbidden />}</Route>
           <Route path="/customers">{user.role === 'admin' ? <CustomersPage /> : <Forbidden />}</Route>
+          <Route path="/admin/sessions">{user.role === 'admin' ? <AdminWaSessionsPage /> : <Forbidden />}</Route>
           <Route path="/settings">{user.role === 'admin' ? <SettingsPage /> : <Forbidden />}</Route>
           <Route><NotFound /></Route>
         </Switch></ErrorBoundary>
@@ -104,7 +108,7 @@ function Shell() {
 function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const registerMode = mode === 'register'; const [, setLocation] = useLocation();
   const login = useLogin(); const register = useRegister();
-  const [form, setForm] = useState({ name: '', email: '', password: '', referralCode: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', referralCode: new URLSearchParams(window.location.search).get('ref') || '' });
   const [error, setError] = useState('');
   const chooseDemoAccount = (email: string) => {
     setForm(current => ({ ...current, email, password: '' }));
@@ -127,7 +131,7 @@ function LoadingBlock() { return <div className="panel loading-panel"><div class
 function ErrorBlock({ retry }: { retry: () => void }) { return <div className="empty-panel"><CircleAlert /><b>Data belum dapat dimuat</b><span>Periksa koneksi Anda, lalu coba kembali.</span><button className="button button-secondary" onClick={retry}><RotateCw size={15} /> Coba lagi</button></div>; }
 function Empty({ title, text }: { title: string; text: string }) { return <div className="empty-panel"><div className="empty-icon"><FileText size={21} /></div><b>{title}</b><span>{text}</span></div>; }
 function Metric({ label, value, hint, icon: Icon, tone = '' }: { label: string; value: string | number; hint?: string; icon: typeof Activity; tone?: string }) { return <div className="metric-card"><div className={`metric-icon ${tone}`}><Icon size={18} /></div><div className="metric-label">{label}</div><div className="metric-value" data-testid={`metric-${label.toLowerCase().replaceAll(' ', '-')}`}>{value}</div>{hint && <div className="metric-hint">{hint}</div>}</div>; }
-function Status({ value }: { value?: string | null }) { const key = value || '—'; const labels: Record<string, string> = { online: 'Terhubung', offline: 'Terputus', connecting: 'Menghubungkan', logged_out: 'Keluar', active: 'Aktif', draft: 'Draf', paused: 'Dijeda', completed: 'Selesai', cancelled: 'Dibatalkan', running: 'Berjalan', sent: 'Terkirim', failed: 'Gagal', pending: 'Menunggu', unsent: 'Belum dikirim', opted_out: 'Berhenti', approved: 'Diproses', rejected: 'Ditolak', paid: 'Berhasil', withdraw_refund: 'Pengembalian dana', blocked: 'Diblokir' }; return <span className={`status status-${key}`}>{labels[key] || key}</span>; }
+function Status({ value }: { value?: string | null }) { const key = value || '—'; const labels: Record<string, string> = { online: 'Terhubung', offline: 'Terputus', inactive: 'Tidak aktif', connecting: 'Menghubungkan', logged_out: 'Keluar', active: 'Aktif', draft: 'Draf', paused: 'Dijeda', completed: 'Selesai', cancelled: 'Dibatalkan', running: 'Berjalan', sent: 'Terkirim', failed: 'Gagal', pending: 'Menunggu', unsent: 'Belum dikirim', opted_out: 'Berhenti', approved: 'Diproses', rejected: 'Ditolak', paid: 'Berhasil', withdraw_refund: 'Pengembalian dana', blocked: 'Diblokir' }; return <span className={`status status-${key}`}>{labels[key] || key}</span>; }
 function DashboardPage({ user }: { user: { role: string; id: string } }) {
   const overview = useGetDashboardOverview(); const sessions = useListWaSessions();
   if (overview.isLoading) return <LoadingBlock />; if (overview.isError) return <ErrorBlock retry={() => overview.refetch()} />;
@@ -195,8 +199,20 @@ function BlastPage({ role }: { role: string }) {
 }
 
 function ResultsPage({ role, userId }: { role: string; userId: string }) {
-  const [search, setSearch] = useState(''); const [status, setStatus] = useState('all'); const [campaignId, setCampaignId] = useState(''); const [page, setPage] = useState(1);
-  const [exporting, setExporting] = useState(false); const [exportError, setExportError] = useState('');
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [status, setStatus] = useState('all');
+  const [campaignId, setCampaignId] = useState('');
+  const [filterUserId, setFilterUserId] = useState('');
+  const [page, setPage] = useState(1);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  const resultUserId = role === 'admin' ? filterUserId : userId;
   const downloadResults = async (format: 'csv' | 'xlsx') => {
     setExporting(true); setExportError('');
     try {
@@ -204,7 +220,7 @@ function ResultsPage({ role, userId }: { role: string; userId: string }) {
       if (campaignId) query.set('campaignId', campaignId);
       if (status !== 'all') query.set('status', status);
       if (search.trim()) query.set('search', search.trim());
-      if (role !== 'admin') query.set('userId', userId);
+      if (resultUserId) query.set('userId', resultUserId);
       const token = await getAccessToken();
       const response = await fetch(`/api/results/export?${query}`, { headers: token ? { authorization: `Bearer ${token}` } : {} });
       if (!response.ok) throw new Error('File hasil tidak dapat dibuat.');
@@ -214,11 +230,62 @@ function ResultsPage({ role, userId }: { role: string; userId: string }) {
       setExportError(error instanceof Error ? error.message : 'Ekspor gagal.');
     } finally { setExporting(false); }
   };
-  const params = useMemo(() => ({ ...(campaignId ? { campaignId } : {}), ...(status !== 'all' ? { status: status as 'sent' | 'failed' | 'pending' | 'unsent' } : {}), ...(search ? { search } : {}), ...(role !== 'admin' ? { userId } : {}), page, pageSize: 12 }), [campaignId, status, search, role, userId, page]);
-  const summaryParams = useMemo(() => ({ ...(campaignId ? { campaignId } : {}), ...(role !== 'admin' ? { userId } : {}) }), [campaignId, role, userId]);
-  const results = useListResults(params, { query: { queryKey: getListResultsQueryKey(params) } }); const summary = useGetResultsSummary(summaryParams, { query: { queryKey: getGetResultsSummaryQueryKey(summaryParams) } }); const campaigns = useListCampaigns(); const summaries = useListCampaignResultSummaries();
+  const params = useMemo(() => ({
+    ...(campaignId ? { campaignId } : {}),
+    ...(status !== 'all' ? { status: status as 'sent' | 'failed' | 'pending' | 'unsent' } : {}),
+    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+    ...(resultUserId ? { userId: resultUserId } : {}),
+    page,
+    pageSize: 12,
+  }), [campaignId, status, debouncedSearch, resultUserId, page]);
+  const summaryParams = useMemo(() => ({
+    ...(campaignId ? { campaignId } : {}),
+    ...(resultUserId ? { userId: resultUserId } : {}),
+  }), [campaignId, resultUserId]);
+  const results = useListResults(params, { query: { queryKey: getListResultsQueryKey(params) } });
+  const summary = useGetResultsSummary(summaryParams, { query: { queryKey: getGetResultsSummaryQueryKey(summaryParams) } });
+  const campaigns = useListCampaigns({
+    query: { queryKey: getListCampaignsQueryKey(), enabled: role === 'admin' },
+  });
+  const campaignSummaries = useListCampaignResultSummaries();
+  const usersParams = useMemo(() => ({}), []);
+  const users = useListUsers(usersParams, {
+    query: { queryKey: getListUsersQueryKey(usersParams), enabled: role === 'admin' },
+  });
+  const campaignOptions = role === 'admin'
+    ? campaigns.data
+    : campaignSummaries.data?.map(item => item.campaign);
   const statuses = [{ v: 'all', l: 'Semua status' }, { v: 'sent', l: 'Terkirim' }, { v: 'failed', l: 'Gagal' }, { v: 'pending', l: 'Menunggu' }, { v: 'unsent', l: 'Belum dikirim' }];
-   return <><div className="metrics-grid results-metrics"><Metric label="Diproses" value={summary.data?.totalProcessed ?? '—'} hint="Kontak terproses" icon={Activity} /><Metric label="Terkirim" value={summary.data?.sent ?? '—'} hint={`${summary.data?.successRate ?? 0}% tingkat berhasil`} icon={CheckCircle2} tone="mint" /><Metric label="Gagal" value={summary.data?.failed ?? '—'} hint="Butuh tinjauan" icon={CircleAlert} tone="rose" /><Metric label="Menunggu" value={summary.data?.pending ?? '—'} hint="Dalam antrean" icon={Clock3} tone="gold" /></div><section className="panel results-panel"><SectionTitle title="Catatan pengiriman" detail={`${results.data?.total ?? 0} hasil sesuai filter`} action={<div style={{ display: 'flex', gap: 7 }}><button className="button button-secondary button-small" disabled={exporting} onClick={() => void downloadResults('csv')}><Download size={13} /> CSV</button><button className="button button-secondary button-small" disabled={exporting} onClick={() => void downloadResults('xlsx')}><Download size={13} /> XLSX</button></div>} />{exportError && <div className="inline-error"><CircleAlert size={14} /> {exportError}</div>}<div className="filter-bar"><div className="search-field"><Search size={16} /><input aria-label="Cari nomor kontak" placeholder="Cari nomor kontak..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div><select aria-label="Filter status" value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}>{statuses.map(s => <option value={s.v} key={s.v}>{s.l}</option>)}</select><select aria-label="Filter kampanye" value={campaignId} onChange={e => { setCampaignId(e.target.value); setPage(1); }}><option value="">Semua kampanye</option>{campaigns.data?.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select></div><div className="table-scroll"><table><thead><tr><th>Nomor kontak</th>{role === 'admin' && <th>Pengirim</th>}<th>Kampanye</th><th>Status</th><th>Nomor sesi</th><th>Waktu</th></tr></thead><tbody>{results.isLoading ? <tr><td colSpan={6}><span className="table-loading">Memuat catatan...</span></td></tr> : results.data?.items?.length ? results.data.items.map(row => <tr key={row.id}><td className="mono">{row.phone}</td>{role === 'admin' && <td>{row.customerName || '—'}</td>}<td>{row.campaignTitle}</td><td><Status value={row.status} />{row.errorReason && <small className="error-reason">{row.errorReason}</small>}</td><td className="mono">{row.senderPhone || '—'}</td><td>{date(row.sentAt)}</td></tr>) : <tr><td colSpan={6}><Empty title="Tidak ada hasil ditemukan" text="Ubah filter atau cari data lain." /></td></tr>}</tbody></table></div><div className="table-footer"><span>Halaman {page} · {results.data?.total ?? 0} catatan</span><div><button className="button button-secondary button-small" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Sebelumnya</button><button className="button button-secondary button-small" disabled={!results.data || page * results.data.pageSize >= results.data.total} onClick={() => setPage(p => p + 1)}>Berikutnya</button></div></div></section>{summaries.data?.length ? <section className="panel campaign-summary"><SectionTitle title="Ringkasan per kampanye" detail="Rangkuman hasil kampanye Anda" />{summaries.data.map((s, i) => <div className="summary-row" key={s.campaign.id}><span className="summary-index">0{i + 1}</span><b>{s.campaign.title}</b><span>{s.summary.sent} terkirim</span><Status value={s.campaign.status} /></div>)}</section> : null}</>;
+  const columnCount = role === 'admin' ? 6 : 5;
+  return <>
+    <div className="metrics-grid results-metrics">
+      <Metric label="Diproses" value={summary.data?.totalProcessed ?? '—'} hint="Kontak terproses" icon={Activity} />
+      <Metric label="Terkirim" value={summary.data?.sent ?? '—'} hint={`${summary.data?.successRate ?? 0}% tingkat berhasil`} icon={CheckCircle2} tone="mint" />
+      <Metric label="Gagal" value={summary.data?.failed ?? '—'} hint="Butuh tinjauan" icon={CircleAlert} tone="rose" />
+      <Metric label="Menunggu" value={summary.data?.pending ?? '—'} hint="Dalam antrean" icon={Clock3} tone="gold" />
+    </div>
+    <section className="panel results-panel">
+      <SectionTitle title="Catatan pengiriman" detail={`${results.data?.total ?? 0} hasil sesuai filter`} action={<div style={{ display: 'flex', gap: 7 }}><button className="button button-secondary button-small" disabled={exporting} onClick={() => void downloadResults('csv')}><Download size={13} /> CSV</button><button className="button button-secondary button-small" disabled={exporting} onClick={() => void downloadResults('xlsx')}><Download size={13} /> XLSX</button></div>} />
+      {exportError && <div className="inline-error"><CircleAlert size={14} /> {exportError}</div>}
+      <div className="filter-bar">
+        <div className="search-field"><Search size={16} /><input aria-label="Cari nomor kontak" placeholder="Cari nomor kontak..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div>
+        <select aria-label="Filter status" value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}>{statuses.map(item => <option value={item.v} key={item.v}>{item.l}</option>)}</select>
+        <select aria-label="Filter kampanye" value={campaignId} onChange={e => { setCampaignId(e.target.value); setPage(1); }}><option value="">Semua kampanye</option>{campaignOptions?.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}</select>
+        {role === 'admin' && <select aria-label="Filter customer" value={filterUserId} onChange={e => { setFilterUserId(e.target.value); setPage(1); }}><option value="">Semua pengirim</option>{users.data?.map(customer => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select>}
+      </div>
+      <div className="table-scroll"><table>
+        <thead><tr><th>Nomor kontak</th>{role === 'admin' && <th>Pengirim</th>}<th>Kampanye</th><th>Status</th><th>Nomor sesi</th><th>Waktu</th></tr></thead>
+        <tbody>{results.isLoading
+          ? <tr><td colSpan={columnCount}><span className="table-loading">Memuat catatan...</span></td></tr>
+          : results.data?.items?.length
+            ? results.data.items.map(row => <tr key={row.id}><td className="mono">{row.phone}</td>{role === 'admin' && <td>{row.customerName || '—'}</td>}<td>{row.campaignTitle}</td><td><Status value={row.status} />{row.errorReason && <small className="error-reason">{row.errorReason}</small>}</td><td className="mono">{row.senderPhone || '—'}</td><td>{date(row.sentAt)}</td></tr>)
+            : <tr><td colSpan={columnCount}><Empty title="Tidak ada hasil ditemukan" text="Ubah filter atau cari data lain." /></td></tr>}
+        </tbody>
+      </table></div>
+      <div className="table-footer"><span>Halaman {page} · {results.data?.total ?? 0} catatan</span><div><button className="button button-secondary button-small" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Sebelumnya</button><button className="button button-secondary button-small" disabled={!results.data || page * results.data.pageSize >= results.data.total} onClick={() => setPage(p => p + 1)}>Berikutnya</button></div></div>
+    </section>
+    {campaignSummaries.data?.length ? <section className="panel campaign-summary"><SectionTitle title="Ringkasan per kampanye" detail="Rangkuman hasil kampanye Anda" />{campaignSummaries.data.map((item, index) => <div className="summary-row" key={item.campaign.id}><span className="summary-index">0{index + 1}</span><b>{item.campaign.title}</b><span>{item.summary.sent} terkirim</span><Status value={item.campaign.status} /></div>)}</section> : null}
+  </>;
 }
 
 function WalletPage() {
@@ -227,8 +294,24 @@ function WalletPage() {
 }
 
 function ReferralsPage() {
-  const q = useGetReferrals(); const [copied, setCopied] = useState(false); if (q.isLoading) return <LoadingBlock />; if (q.isError) return <ErrorBlock retry={() => q.refetch()} />; const r = q.data;
-  return <><div className="referral-hero"><div className="referral-copy"><div className="eyebrow">PROGRAM REFERRAL</div><h2>Bagikan kepercayaan,<br /><em>tumbuh bersama.</em></h2><p>Dapatkan bonus dari setiap pesan terverifikasi yang dikirim jaringan Anda.</p></div><div className="referral-code"><span>KODE UNDANGAN ANDA</span><b>{r?.code || '—'}</b><button onClick={() => { if (r?.code) navigator.clipboard?.writeText(r.code).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); }); }}><Copy size={14} /> {copied ? 'Tersalin' : 'Salin kode'}</button></div><div className="referral-decoration"><Link2 size={33} /></div></div><div className="metrics-grid"><Metric label="Jumlah downline" value={r?.downlineCount ?? 0} hint="Customer yang bergabung" icon={Users} tone="blue" /><Metric label="Pendapatan referral" value={money(r?.totalEarnings)} hint={`Bonus ${money(r?.bonusPerMessage)} per pesan`} icon={TrendingUp} tone="mint" /><Metric label="Bonus per pesan" value={money(r?.bonusPerMessage)} hint="Setiap pesan berhasil" icon={Sparkles} tone="gold" /></div><section className="panel downline-panel"><SectionTitle title="Jaringan Anda" detail="Performa customer yang menggunakan kode Anda" />{r?.downlines?.length ? <div className="table-scroll"><table><thead><tr><th>Nama customer</th><th>Bergabung</th><th>Pesan terkirim</th><th>Pendapatan referral</th></tr></thead><tbody>{r.downlines.map((d, i) => <tr key={`${d.name}-${i}`}><td><span className="downline-name"><span className="avatar avatar-small">{d.name.slice(0, 1)}</span><b>{d.name}</b></span></td><td>{date(d.joinedAt)}</td><td>{d.sentCount.toLocaleString('id-ID')}</td><td className="money-cell">{money(d.earnings)}</td></tr>)}</tbody></table></div> : <Empty title="Belum ada downline" text="Bagikan kode referral untuk mulai membangun jaringan." />}</section></>;
+  const q = useGetReferrals();
+  const [copied, setCopied] = useState(false);
+  if (q.isLoading) return <LoadingBlock />;
+  if (q.isError) return <ErrorBlock retry={() => q.refetch()} />;
+  const r = q.data;
+  const basePath = window.location.pathname.replace(/\/[^/]*$/, '');
+  const referralUrl = r?.code
+    ? `${window.location.origin}${basePath}/register?ref=${encodeURIComponent(r.code)}`
+    : '';
+  return <>
+    <div className="referral-hero">
+      <div className="referral-copy"><div className="eyebrow">PROGRAM REFERRAL</div><h2>Bagikan kepercayaan,<br /><em>tumbuh bersama.</em></h2><p>Dapatkan bonus dari setiap pesan terverifikasi yang dikirim jaringan Anda.</p></div>
+      <div className="referral-code"><span>KODE UNDANGAN ANDA</span><b>{r?.code || '—'}</b>{referralUrl && <a className="referral-link" href={referralUrl}>{referralUrl}</a>}<button disabled={!referralUrl} onClick={() => { if (referralUrl) navigator.clipboard?.writeText(referralUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); }); }}><Copy size={14} /> {copied ? 'Tersalin' : 'Salin tautan'}</button></div>
+      <div className="referral-decoration"><Link2 size={33} /></div>
+    </div>
+    <div className="metrics-grid"><Metric label="Jumlah downline" value={r?.downlineCount ?? 0} hint="Customer yang bergabung" icon={Users} tone="blue" /><Metric label="Pendapatan referral" value={money(r?.totalEarnings)} hint={`Bonus ${money(r?.bonusPerMessage)} per pesan`} icon={TrendingUp} tone="mint" /><Metric label="Bonus per pesan" value={money(r?.bonusPerMessage)} hint="Setiap pesan berhasil" icon={Sparkles} tone="gold" /></div>
+    <section className="panel downline-panel"><SectionTitle title="Jaringan Anda" detail="Performa customer yang menggunakan kode Anda" />{r?.downlines?.length ? <div className="table-scroll"><table><thead><tr><th>Nama customer</th><th>Bergabung</th><th>Pesan terkirim</th><th>Pendapatan referral</th></tr></thead><tbody>{r.downlines.map((d, i) => <tr key={`${d.name}-${i}`}><td><span className="downline-name"><span className="avatar avatar-small">{d.name.slice(0, 1)}</span><b>{d.name}</b></span></td><td>{date(d.joinedAt)}</td><td>{d.sentCount.toLocaleString('id-ID')}</td><td className="money-cell">{money(d.earnings)}</td></tr>)}</tbody></table></div> : <Empty title="Belum ada downline" text="Bagikan kode referral untuk mulai membangun jaringan." />}</section>
+  </>;
 }
 
 function WithdrawalsPage({ role }: { role: string }) {
@@ -319,10 +402,35 @@ function CustomersPage() {
   return <section className="panel customers-panel"><SectionTitle title="Akun customer" detail={`${q.data?.length || 0} akun terdaftar`} /><div className="filter-bar"><div className="search-field"><Search size={16} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari nama atau email..." /></div><span className="secure-badge"><Users size={14} /> Pengelolaan akses</span></div><div className="table-scroll"><table><thead><tr><th>Customer</th><th>Referral</th><th>Bergabung</th><th>Pesan terkirim</th><th>Status akun</th><th>Aksi</th></tr></thead><tbody>{q.isLoading ? <tr><td colSpan={6}>Memuat akun customer...</td></tr> : q.data?.length ? q.data.map(u => <tr key={u.id}><td><div className="customer-cell"><span className="avatar avatar-small">{u.name.slice(0, 1)}</span><span><b>{u.name}</b><small>{u.email}</small></span></div></td><td className="mono">{u.referralCode}</td><td>{date(u.createdAt)}</td><td>{u.sentCount.toLocaleString('id-ID')}</td><td><Status value={u.status} /></td><td><button className={`button button-small ${u.status === 'active' ? 'button-secondary' : 'button-primary'}`} onClick={() => update.mutate({ userId: u.id, data: { status: u.status === 'active' ? 'blocked' : 'active' } }, { onSuccess: () => qc.invalidateQueries({ queryKey: getListUsersQueryKey(params) }) })}>{u.status === 'active' ? 'Blokir' : 'Aktifkan'}</button></td></tr>) : <tr><td colSpan={6}><Empty title="Customer tidak ditemukan" text="Coba kata pencarian lain." /></td></tr>}</tbody></table></div></section>;
 }
 
+function AdminWaSessionsPage() {
+  const q = useListAdminWaSessions({
+    query: { queryKey: getListAdminWaSessionsQueryKey(), refetchInterval: 5000 },
+  });
+  const disconnect = useDisconnectAdminWaSession();
+  const qc = useQueryClient();
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: getListAdminWaSessionsQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetDashboardOverviewQueryKey() });
+  };
+  if (q.isLoading) return <LoadingBlock />;
+  if (q.isError) return <ErrorBlock retry={() => q.refetch()} />;
+  return <section className="panel customers-panel">
+    <SectionTitle title="Sesi WhatsApp customer" detail={`${q.data?.length ?? 0} sesi terdaftar`} action={<button className="button button-secondary button-small" onClick={() => q.refetch()}><RotateCw size={13} /> Muat ulang</button>} />
+    <div className="table-scroll"><table>
+      <thead><tr><th>Pemilik</th><th>Label sesi</th><th>Nomor</th><th>Status</th><th>Terakhir aktif</th><th>Aksi</th></tr></thead>
+      <tbody>{q.data?.length ? q.data.map(session => <tr key={session.id}>
+        <td><div className="customer-cell"><span className="avatar avatar-small">{session.ownerName.slice(0, 1)}</span><span><b>{session.ownerName}</b><small>{session.ownerEmail}</small></span></div></td>
+        <td>{session.label}</td><td className="mono">{session.phone || '—'}</td><td><Status value={session.status} /></td><td>{date(session.lastConnectedAt)}</td>
+        <td><button className="button button-secondary button-small" disabled={disconnect.isPending} onClick={() => { if (window.confirm(`Putuskan sesi ${session.label} milik ${session.ownerName}?`)) disconnect.mutate({ sessionId: session.id }, { onSuccess: refresh }); }}><Ban size={13} /> Putuskan</button></td>
+      </tr>) : <tr><td colSpan={6}><Empty title="Belum ada sesi" text="Sesi WhatsApp customer akan tercatat di sini." /></td></tr>}</tbody>
+    </table></div>
+  </section>;
+}
+
 function SettingsPage() {
   const q = useGetSettings(); const update = useUpdateSettings(); const qc = useQueryClient(); const [values, setValues] = useState<AppSettings | null>(null); const [saved, setSaved] = useState(false); if (q.isLoading) return <LoadingBlock />; if (q.isError) return <ErrorBlock retry={() => q.refetch()} />;
   const settings = values || q.data; if (!settings) return <Empty title="Pengaturan belum tersedia" text="Coba muat kembali." />;
-  return <div className="settings-layout"><section className="panel settings-form-panel"><SectionTitle title="Tarif & batas operasional" detail="Perubahan berlaku untuk perhitungan dan pekerjaan baru." action={<span className="secure-badge"><ShieldCheck size={13} /> Khusus admin</span>} /><div className="settings-fields"><label>Tarif per pesan terkirim<span>Imbalan customer per pesan berhasil</span><div className="setting-input"><span>Rp</span><input type="number" min="0" value={settings.perMessage} onChange={e => { setValues({ ...settings, perMessage: Number(e.target.value) }); setSaved(false); }} /></div></label><label>Bonus referral per pesan<span>Bonus referral dari setiap pesan downline</span><div className="setting-input"><span>Rp</span><input type="number" min="0" value={settings.referralBonus} onChange={e => { setValues({ ...settings, referralBonus: Number(e.target.value) }); setSaved(false); }} /></div></label><label>Minimum penarikan<span>Batas minimum pengajuan pencairan</span><div className="setting-input"><span>Rp</span><input type="number" min="15000" value={settings.minimumWithdrawal} onChange={e => { setValues({ ...settings, minimumWithdrawal: Number(e.target.value) }); setSaved(false); }} /></div></label><label>Waktu rilis saldo tertunda<span>Jam sebelum pendapatan dapat ditarik</span><div className="setting-input"><input type="number" min="0" max="720" value={settings.pendingReleaseHours} onChange={e => { setValues({ ...settings, pendingReleaseHours: Number(e.target.value) }); setSaved(false); }} /><span>jam</span></div></label><label>Batas pesan per sesi per jam<span>Pembatas operasional setiap sesi</span><div className="setting-input"><input type="number" min="1" max="60" value={settings.maxMessagesPerSessionPerHour} onChange={e => { setValues({ ...settings, maxMessagesPerSessionPerHour: Number(e.target.value) }); setSaved(false); }} /><span>pesan / jam</span></div></label></div><div className="setting-toggle-row"><div><b>Masukkan ulang saat sesi terputus</b><span>Kontak tertunda dapat dipertimbangkan kembali setelah sesi pulih.</span></div><button role="switch" aria-checked={Boolean(settings.allowDisconnectRequeue)} className={`toggle-switch ${settings.allowDisconnectRequeue ? 'toggle-on' : ''}`} onClick={() => { setValues({ ...settings, allowDisconnectRequeue: !settings.allowDisconnectRequeue }); setSaved(false); }}><i /></button></div><div className="settings-save-row">{saved && <span className="inline-success"><CheckCircle2 size={14} /> Pengaturan disimpan</span>}<button className="button button-primary" disabled={update.isPending} onClick={() => update.mutate({ data: settings }, { onSuccess: () => { setSaved(true); qc.setQueryData(getGetSettingsQueryKey(), settings); qc.invalidateQueries({ queryKey: getGetSettingsQueryKey() }); qc.invalidateQueries({ queryKey: getGetWalletQueryKey() }); }, onError: () => setSaved(false) })}>{update.isPending ? 'Menyimpan...' : 'Simpan pengaturan'}<ArrowUpRight size={15} /></button></div></section><aside className="settings-aside"><div className="settings-note"><div className="note-icon"><ShieldCheck size={18} /></div><div className="eyebrow">PRAKTIK TERJAGA</div><h3>Operasi tanpa<br />rotasi otomatis.</h3><p>Sesi WhatsApp tetap dikendalikan oleh pemilik akun. Tidak ada pergantian akun otomatis.</p></div><div className="settings-note light-note"><div className="note-icon"><Activity size={18} /></div><b>Batas pengiriman</b><p>Jeda pengiriman yang tersedia adalah 1, 5, 15, dan 30 detik. Batas per jam ini melengkapi jeda yang dipilih sender.</p></div></aside></div>;
+  return <div className="settings-layout"><section className="panel settings-form-panel"><SectionTitle title="Tarif & batas operasional" detail="Perubahan berlaku untuk perhitungan dan pekerjaan baru." action={<span className="secure-badge"><ShieldCheck size={13} /> Khusus admin</span>} /><div className="settings-fields"><label>Tarif per pesan terkirim<span>Imbalan customer per pesan berhasil</span><div className="setting-input"><span>Rp</span><input type="number" min="0" value={settings.perMessage} onChange={e => { setValues({ ...settings, perMessage: Number(e.target.value) }); setSaved(false); }} /></div></label><label>Bonus referral per pesan<span>Bonus referral dari setiap pesan downline</span><div className="setting-input"><span>Rp</span><input type="number" min="0" value={settings.referralBonus} onChange={e => { setValues({ ...settings, referralBonus: Number(e.target.value) }); setSaved(false); }} /></div></label><label>Minimum penarikan<span>Batas minimum pengajuan pencairan</span><div className="setting-input"><span>Rp</span><input type="number" min="15000" value={settings.minimumWithdrawal} onChange={e => { setValues({ ...settings, minimumWithdrawal: Number(e.target.value) }); setSaved(false); }} /></div></label><label>Waktu rilis saldo tertunda<span>Jam sebelum pendapatan dapat ditarik</span><div className="setting-input"><input type="number" min="0" max="720" value={settings.pendingReleaseHours} onChange={e => { setValues({ ...settings, pendingReleaseHours: Number(e.target.value) }); setSaved(false); }} /><span>jam</span></div></label><label>Batas pesan per sesi per jam<span>Pembatas operasional setiap sesi</span><div className="setting-input"><input type="number" min="1" max="60" value={settings.maxMessagesPerSessionPerHour} onChange={e => { setValues({ ...settings, maxMessagesPerSessionPerHour: Number(e.target.value) }); setSaved(false); }} /><span>pesan / jam</span></div></label><label>Sesi idle sebelum nonaktif<span>Jeda tanpa pengiriman setelah pekerjaan selesai</span><div className="setting-input"><input type="number" min="1" max="1440" value={settings.sessionIdleMinutes} onChange={e => { setValues({ ...settings, sessionIdleMinutes: Number(e.target.value) }); setSaved(false); }} /><span>menit</span></div></label></div><div className="setting-toggle-row"><div><b>Masukkan ulang saat sesi terputus</b><span>Kontak tertunda dapat dipertimbangkan kembali setelah sesi pulih.</span></div><button role="switch" aria-checked={Boolean(settings.allowDisconnectRequeue)} className={`toggle-switch ${settings.allowDisconnectRequeue ? 'toggle-on' : ''}`} onClick={() => { setValues({ ...settings, allowDisconnectRequeue: !settings.allowDisconnectRequeue }); setSaved(false); }}><i /></button></div><div className="settings-save-row">{saved && <span className="inline-success"><CheckCircle2 size={14} /> Pengaturan disimpan</span>}<button className="button button-primary" disabled={update.isPending} onClick={() => update.mutate({ data: settings }, { onSuccess: () => { setSaved(true); qc.setQueryData(getGetSettingsQueryKey(), settings); qc.invalidateQueries({ queryKey: getGetSettingsQueryKey() }); qc.invalidateQueries({ queryKey: getGetWalletQueryKey() }); }, onError: () => setSaved(false) })}>{update.isPending ? 'Menyimpan...' : 'Simpan pengaturan'}<ArrowUpRight size={15} /></button></div></section><aside className="settings-aside"><div className="settings-note"><div className="note-icon"><ShieldCheck size={18} /></div><div className="eyebrow">PRAKTIK TERJAGA</div><h3>Operasi tanpa<br />rotasi otomatis.</h3><p>Sesi WhatsApp tetap dikendalikan oleh pemilik akun. Tidak ada pergantian akun otomatis.</p></div><div className="settings-note light-note"><div className="note-icon"><Activity size={18} /></div><b>Batas pengiriman</b><p>Jeda pengiriman yang tersedia adalah 1, 5, 15, dan 30 detik. Batas per jam ini melengkapi jeda yang dipilih sender.</p></div></aside></div>;
 }
 
 function Forbidden() { return <div className="panel empty-panel"><ShieldCheck size={24} /><b>Akses administrator diperlukan</b><span>Halaman ini hanya tersedia untuk administrator.</span><Link href="/" className="button button-secondary">Kembali ke ringkasan</Link></div>; }
