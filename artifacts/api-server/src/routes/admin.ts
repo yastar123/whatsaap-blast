@@ -46,7 +46,7 @@ import { getAppSettings, saveAppSettings } from "../lib/app-settings";
 import { requireAdmin, requireAuth } from "../lib/auth";
 
 const router: IRouter = Router();
-router.use(requireAuth, requireAdmin);
+router.use("/admin", requireAuth, requireAdmin);
 
 async function campaignDto(campaign: typeof campaignsTable.$inferSelect) {
   const [counts] = await db
