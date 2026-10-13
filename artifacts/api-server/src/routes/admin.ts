@@ -123,10 +123,12 @@ router.post("/admin/campaigns", async (req, res): Promise<void> => {
 router.patch("/admin/campaigns/:campaignId", async (req, res): Promise<void> => {
   const params = UpdateCampaignParams.safeParse(req.params);
   const parsed = UpdateCampaignBody.safeParse(req.body);
-  if (!params.success || !parsed.success) {
-    res.status(400).json({
-      error: !params.success ? params.error.message : parsed.error.message,
-    });
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
     return;
   }
   const [campaign] = await db
@@ -377,10 +379,12 @@ router.get("/admin/users", async (req, res): Promise<void> => {
 router.patch("/admin/users/:userId/status", async (req, res): Promise<void> => {
   const params = UpdateUserStatusParams.safeParse(req.params);
   const parsed = UpdateUserStatusBody.safeParse(req.body);
-  if (!params.success || !parsed.success) {
-    res.status(400).json({
-      error: !params.success ? params.error.message : parsed.error.message,
-    });
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
     return;
   }
   if (params.data.userId === req.auth!.userId) {

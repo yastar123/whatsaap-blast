@@ -249,10 +249,12 @@ router.patch(
   async (req, res): Promise<void> => {
     const params = UpdateWithdrawalParams.safeParse(req.params);
     const parsed = UpdateWithdrawalBody.safeParse(req.body);
-    if (!params.success || !parsed.success) {
-      res.status(400).json({
-        error: !params.success ? params.error.message : parsed.error.message,
-      });
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
       return;
     }
     try {

@@ -12,6 +12,7 @@ export interface Withdrawal {
   amount: number;
   method: string;
   accountName: string;
+  accountNumber?: string;
   accountNumberMasked: string;
   status: WithdrawalStatus;
   /** @nullable */

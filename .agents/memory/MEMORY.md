@@ -1,0 +1,1 @@
+- [Replit package firewall](pnpm-package-firewall.md) — use a compatible direct-dependency update when a locked transitive package is blocked; do not bypass the firewall.

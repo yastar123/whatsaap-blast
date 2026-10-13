@@ -861,7 +861,7 @@ components:
       type: object
       properties:
         sessionId: { type: string }
-        delaySeconds: { type: integer, enum: [15, 30, 60] }
+        delaySeconds: { type: integer, enum: [1, 5, 15, 30] }
       required: [sessionId, delaySeconds]
     BlastJob:
       type: object

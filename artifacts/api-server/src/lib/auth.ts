@@ -44,7 +44,7 @@ export async function checkPassword(password: string, hash: string): Promise<boo
 export async function issueTokens(user: User) {
   const accessToken = jwt.sign(
     { role: user.role },
-    authSecret,
+    authSecret!,
     { subject: user.id, expiresIn: "15m" },
   );
   const refreshToken = randomBytes(48).toString("base64url");
@@ -120,7 +120,7 @@ export async function requireAuth(
     return;
   }
   try {
-    const payload = jwt.verify(token, authSecret);
+    const payload = jwt.verify(token, authSecret!);
     if (typeof payload === "string" || !payload.sub) {
       res.status(401).json({ error: "Sesi tidak valid." });
       return;

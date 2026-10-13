@@ -46,7 +46,7 @@ export function attachRealtime(io: Server): void {
         next(new Error("Authentication required"));
         return;
       }
-      const payload = jwt.verify(token, authSecret);
+      const payload = jwt.verify(token, authSecret!);
       if (typeof payload === "string" || typeof payload.sub !== "string") {
         next(new Error("Invalid authentication"));
         return;

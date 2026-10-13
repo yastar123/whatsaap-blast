@@ -454,7 +454,7 @@ export const DeleteContactResponse = zod.object({
  */
 export const StartBlastBody = zod.object({
   "sessionId": zod.string(),
-  "delaySeconds": zod.union([zod.literal(15),zod.literal(30),zod.literal(60)])
+  "delaySeconds": zod.union([zod.literal(1),zod.literal(5),zod.literal(15),zod.literal(30)])
 })
 
 export const StartBlastResponse = zod.object({
@@ -655,6 +655,7 @@ export const ListWithdrawalsResponseItem = zod.object({
   "amount": zod.number().int(),
   "method": zod.string(),
   "accountName": zod.string(),
+  "accountNumber": zod.string().optional(),
   "accountNumberMasked": zod.string(),
   "status": zod.enum(['pending', 'approved', 'rejected', 'paid']),
   "note": zod.string().nullable(),
@@ -686,6 +687,7 @@ export const RequestWithdrawalResponse = zod.object({
   "amount": zod.number().int(),
   "method": zod.string(),
   "accountName": zod.string(),
+  "accountNumber": zod.string().optional(),
   "accountNumberMasked": zod.string(),
   "status": zod.enum(['pending', 'approved', 'rejected', 'paid']),
   "note": zod.string().nullable(),
@@ -710,6 +712,7 @@ export const UpdateWithdrawalResponse = zod.object({
   "amount": zod.number().int(),
   "method": zod.string(),
   "accountName": zod.string(),
+  "accountNumber": zod.string().optional(),
   "accountNumberMasked": zod.string(),
   "status": zod.enum(['pending', 'approved', 'rejected', 'paid']),
   "note": zod.string().nullable(),

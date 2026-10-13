@@ -10,7 +10,8 @@ export type BlastStartInputDelaySeconds = typeof BlastStartInputDelaySeconds[key
 
 
 export const BlastStartInputDelaySeconds = {
+  NUMBER_1: 1,
+  NUMBER_5: 5,
   NUMBER_15: 15,
   NUMBER_30: 30,
-  NUMBER_60: 60,
 } as const;
