@@ -3,13 +3,31 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Consent-based WhatsApp campaign dashboard API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+    description: Health checks
+  - name: auth
+    description: Account access
+  - name: dashboard
+    description: Dashboard summaries
+  - name: campaigns
+    description: Admin-managed campaigns
+  - name: contacts
+    description: Contacts and consent records
+  - name: whatsapp
+    description: Baileys-linked WhatsApp sessions
+  - name: blast
+    description: Consent-checked campaign delivery
+  - name: results
+    description: Delivery results and exports
+  - name: wallet
+    description: Earnings, referrals, and withdrawals
+  - name: admin
+    description: Administrative operations
 paths:
   /healthz:
     get:
@@ -24,7 +42,620 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      security: []
+      summary: Register a customer account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      security: []
+      summary: Log in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+  /auth/refresh:
+    post:
+      operationId: refreshSession
+      tags: [auth]
+      security: []
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshInput"
+      responses:
+        "200":
+          description: Refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: End current session
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+  /auth/me:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      summary: Get the signed-in user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+  /dashboard/overview:
+    get:
+      operationId: getDashboardOverview
+      tags: [dashboard]
+      summary: Get role-aware dashboard metrics
+      responses:
+        "200":
+          description: Dashboard overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardOverview"
+  /wa-sessions:
+    get:
+      operationId: listWaSessions
+      tags: [whatsapp]
+      summary: List the signed-in user's WhatsApp sessions
+      responses:
+        "200":
+          description: Sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WaSession"
+    post:
+      operationId: createWaSession
+      tags: [whatsapp]
+      summary: Create a WhatsApp session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WaSessionInput"
+      responses:
+        "201":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WaSession"
+  /wa-sessions/{sessionId}/connect:
+    post:
+      operationId: connectWaSession
+      tags: [whatsapp]
+      summary: Start QR or pairing-code authentication
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WaConnectInput"
+      responses:
+        "200":
+          description: Connection instructions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WaConnectResult"
+  /wa-sessions/{sessionId}:
+    delete:
+      operationId: deleteWaSession
+      tags: [whatsapp]
+      summary: Disconnect and remove a WhatsApp session
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Session removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+  /campaigns/active:
+    get:
+      operationId: getActiveCampaign
+      tags: [campaigns]
+      summary: Get the admin-selected active campaign
+      responses:
+        "200":
+          description: Active campaign or null
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActiveCampaignResponse"
+  /admin/campaigns:
+    get:
+      operationId: listCampaigns
+      tags: [campaigns, admin]
+      summary: List campaigns
+      responses:
+        "200":
+          description: Campaigns
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Campaign"
+    post:
+      operationId: createCampaign
+      tags: [campaigns, admin]
+      summary: Create a campaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CampaignInput"
+      responses:
+        "201":
+          description: Campaign created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+  /admin/campaigns/{campaignId}:
+    patch:
+      operationId: updateCampaign
+      tags: [campaigns, admin]
+      summary: Update a campaign
+      parameters:
+        - name: campaignId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CampaignUpdate"
+      responses:
+        "200":
+          description: Campaign updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+    delete:
+      operationId: deleteCampaign
+      tags: [campaigns, admin]
+      summary: Delete a campaign
+      parameters:
+        - name: campaignId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Campaign deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+  /admin/campaigns/{campaignId}/activate:
+    post:
+      operationId: activateCampaign
+      tags: [campaigns, admin]
+      summary: Set the active campaign
+      parameters:
+        - name: campaignId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Campaign activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+  /admin/contacts:
+    get:
+      operationId: listContacts
+      tags: [contacts, admin]
+      summary: Search campaign contacts
+      parameters:
+        - name: campaignId
+          in: query
+          schema: { type: string }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Contacts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactPage"
+    post:
+      operationId: importContacts
+      tags: [contacts, admin]
+      summary: Add contacts with documented consent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactImportInput"
+      responses:
+        "201":
+          description: Import summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResult"
+  /admin/contacts/{contactId}:
+    delete:
+      operationId: deleteContact
+      tags: [contacts, admin]
+      summary: Remove a contact
+      parameters:
+        - name: contactId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Contact removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+  /blast/start:
+    post:
+      operationId: startBlast
+      tags: [blast]
+      summary: Start the active campaign for the selected WhatsApp session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BlastStartInput"
+      responses:
+        "201":
+          description: Blast started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlastJob"
+  /blast/cancel:
+    post:
+      operationId: cancelBlast
+      tags: [blast]
+      summary: Cancel the current blast
+      responses:
+        "200":
+          description: Blast cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlastJob"
+  /blast/current:
+    get:
+      operationId: getCurrentBlast
+      tags: [blast]
+      summary: Get current blast progress
+      responses:
+        "200":
+          description: Current job or null
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentBlastResponse"
+  /results:
+    get:
+      operationId: listResults
+      tags: [results]
+      summary: List scoped delivery results
+      parameters:
+        - name: campaignId
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [all, sent, failed, pending, unsent], default: all }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: userId
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResultPage"
+  /results/export:
+    get:
+      operationId: exportResults
+      tags: [results]
+      summary: Export filtered delivery results
+      parameters:
+        - name: format
+          in: query
+          required: true
+          schema: { type: string, enum: [csv, xlsx] }
+        - name: campaignId
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [all, sent, failed, pending, unsent], default: all }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: userId
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: CSV or Excel workbook
+          content:
+            text/csv:
+              schema: { type: string }
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+  /results/summary:
+    get:
+      operationId: getResultsSummary
+      tags: [results]
+      summary: Get delivery counts and success percentage
+      parameters:
+        - name: campaignId
+          in: query
+          schema: { type: string }
+        - name: userId
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResultSummary"
+  /results/campaigns:
+    get:
+      operationId: listCampaignResultSummaries
+      tags: [results]
+      summary: List result summaries by campaign
+      responses:
+        "200":
+          description: Campaign result summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CampaignResultSummary"
+  /wallet:
+    get:
+      operationId: getWallet
+      tags: [wallet]
+      summary: Get wallet balance and earnings
+      responses:
+        "200":
+          description: Wallet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Wallet"
+  /referrals:
+    get:
+      operationId: getReferrals
+      tags: [wallet]
+      summary: Get referral code, downlines, and referral earnings
+      responses:
+        "200":
+          description: Referrals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferralSummary"
+  /withdrawals:
+    get:
+      operationId: listWithdrawals
+      tags: [wallet]
+      summary: List withdrawals
+      responses:
+        "200":
+          description: Withdrawals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Withdrawal"
+    post:
+      operationId: requestWithdrawal
+      tags: [wallet]
+      summary: Request a withdrawal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WithdrawalInput"
+      responses:
+        "201":
+          description: Withdrawal requested
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Withdrawal"
+  /admin/withdrawals/{withdrawalId}:
+    patch:
+      operationId: updateWithdrawal
+      tags: [admin]
+      summary: Review and update a withdrawal
+      parameters:
+        - name: withdrawalId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WithdrawalReview"
+      responses:
+        "200":
+          description: Withdrawal updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Withdrawal"
+  /admin/users:
+    get:
+      operationId: listUsers
+      tags: [admin]
+      summary: List customer accounts
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Customers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserSummary"
+  /admin/users/{userId}/status:
+    patch:
+      operationId: updateUserStatus
+      tags: [admin]
+      summary: Block or activate a customer
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserStatusInput"
+      responses:
+        "200":
+          description: Customer updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSummary"
+  /admin/settings:
+    get:
+      operationId: getSettings
+      tags: [admin]
+      summary: Get business and delivery settings
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettings"
+    patch:
+      operationId: updateSettings
+      tags: [admin]
+      summary: Update business and delivery settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsUpdate"
+      responses:
+        "200":
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettings"
+security:
+  - bearerAuth: []
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +664,358 @@ components:
           type: string
       required:
         - status
+    ActionResult:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+      required: [success, message]
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        role: { type: string, enum: [admin, customer] }
+        status: { type: string, enum: [active, blocked] }
+        referralCode: { type: string }
+      required: [id, name, email, role, status, referralCode]
+    UserSummary:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          properties:
+            createdAt: { type: string, format: date-time }
+            sentCount: { type: integer }
+          required: [createdAt, sentCount]
+    RegisterInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 2 }
+        email: { type: string, format: email }
+        password: { type: string, minLength: 10 }
+        referralCode: { type: string }
+      required: [name, email, password]
+    LoginInput:
+      type: object
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 1 }
+      required: [email, password]
+    RefreshInput:
+      type: object
+      properties:
+        refreshToken: { type: string, minLength: 20 }
+      required: [refreshToken]
+    AuthResponse:
+      type: object
+      properties:
+        user: { $ref: "#/components/schemas/User" }
+        accessToken: { type: string }
+        refreshToken: { type: string }
+      required: [user, accessToken, refreshToken]
+    DashboardOverview:
+      type: object
+      properties:
+        role: { type: string, enum: [admin, customer] }
+        totalCustomers: { type: integer }
+        onlineSessions: { type: integer }
+        activeCampaign: { $ref: "#/components/schemas/Campaign" }
+        sentTotal: { type: integer }
+        paidTotal: { type: integer }
+        sentByMe: { type: integer }
+        failedByMe: { type: integer }
+        pendingBalance: { type: integer }
+        mainBalance: { type: integer }
+        recentActivity:
+          type: array
+          items: { $ref: "#/components/schemas/ActivityItem" }
+      required: [role, totalCustomers, onlineSessions, sentTotal, paidTotal, sentByMe, failedByMe, pendingBalance, mainBalance, recentActivity]
+    ActivityItem:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        detail: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, title, detail, createdAt]
+    WaSession:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        phone: { type: ["string", "null"] }
+        status: { type: string, enum: [offline, connecting, online, logged_out] }
+        lastConnectedAt: { type: ["string", "null"], format: date-time }
+      required: [id, label, phone, status]
+    WaSessionInput:
+      type: object
+      properties:
+        label: { type: string, minLength: 1, maxLength: 40 }
+      required: [label]
+    WaConnectInput:
+      type: object
+      properties:
+        method: { type: string, enum: [qr, pairing_code] }
+        phone: { type: string }
+      required: [method]
+    WaConnectResult:
+      type: object
+      properties:
+        session: { $ref: "#/components/schemas/WaSession" }
+        qrDataUrl: { type: ["string", "null"] }
+        pairingCode: { type: ["string", "null"] }
+      required: [session, qrDataUrl, pairingCode]
+    Campaign:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        messageText: { type: string }
+        imageUrl: { type: ["string", "null"] }
+        ctaText: { type: ["string", "null"] }
+        ctaUrl: { type: ["string", "null"] }
+        status: { type: string, enum: [draft, active, paused, completed] }
+        isActive: { type: boolean }
+        contactTotal: { type: integer }
+        sentCount: { type: integer }
+        failedCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+      required: [id, title, messageText, imageUrl, ctaText, ctaUrl, status, isActive, contactTotal, sentCount, failedCount, createdAt]
+    ActiveCampaignResponse:
+      type: object
+      properties:
+        campaign:
+          oneOf:
+            - $ref: "#/components/schemas/Campaign"
+            - type: "null"
+      required: [campaign]
+    CampaignInput:
+      type: object
+      properties:
+        title: { type: string, minLength: 2 }
+        messageText: { type: string, minLength: 1 }
+        imageUrl: { type: ["string", "null"], format: uri }
+        ctaText: { type: ["string", "null"] }
+        ctaUrl: { type: ["string", "null"], format: uri }
+      required: [title, messageText]
+    CampaignUpdate:
+      type: object
+      properties:
+        title: { type: string, minLength: 2 }
+        messageText: { type: string, minLength: 1 }
+        imageUrl: { type: ["string", "null"], format: uri }
+        ctaText: { type: ["string", "null"] }
+        ctaUrl: { type: ["string", "null"], format: uri }
+        status: { type: string, enum: [draft, paused] }
+    Contact:
+      type: object
+      properties:
+        id: { type: string }
+        campaignId: { type: string }
+        phone: { type: string }
+        status: { type: string, enum: [unsent, pending, sent, failed, opted_out] }
+        consentSource: { type: ["string", "null"] }
+        consentAt: { type: ["string", "null"], format: date-time }
+        consentRevokedAt: { type: ["string", "null"], format: date-time }
+        errorReason: { type: ["string", "null"] }
+        senderPhone: { type: ["string", "null"] }
+        sentAt: { type: ["string", "null"], format: date-time }
+      required: [id, campaignId, phone, status, consentSource, consentAt, consentRevokedAt, errorReason, senderPhone, sentAt]
+    ContactPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Contact" }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+      required: [items, total, page, pageSize]
+    ContactImportItem:
+      type: object
+      properties:
+        phone: { type: string, minLength: 8 }
+        consentSource: { type: string, minLength: 2 }
+        consentAt: { type: string, format: date-time }
+      required: [phone, consentSource, consentAt]
+    ContactImportInput:
+      type: object
+      properties:
+        campaignId: { type: string }
+        contacts:
+          type: array
+          items: { $ref: "#/components/schemas/ContactImportItem" }
+          minItems: 1
+          maxItems: 1000
+      required: [campaignId, contacts]
+    ImportResult:
+      type: object
+      properties:
+        added: { type: integer }
+        duplicates: { type: integer }
+        invalid: { type: integer }
+        consentMissing: { type: integer }
+      required: [added, duplicates, invalid, consentMissing]
+    BlastStartInput:
+      type: object
+      properties:
+        sessionId: { type: string }
+        delaySeconds: { type: integer, enum: [15, 30, 60] }
+      required: [sessionId, delaySeconds]
+    BlastJob:
+      type: object
+      properties:
+        id: { type: string }
+        campaignId: { type: string }
+        status: { type: string, enum: [running, cancelled, completed, failed] }
+        total: { type: integer }
+        sent: { type: integer }
+        failed: { type: integer }
+        pending: { type: integer }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: ["string", "null"], format: date-time }
+      required: [id, campaignId, status, total, sent, failed, pending, startedAt, finishedAt]
+    CurrentBlastResponse:
+      type: object
+      properties:
+        job:
+          oneOf:
+            - $ref: "#/components/schemas/BlastJob"
+            - type: "null"
+      required: [job]
+    Result:
+      type: object
+      properties:
+        id: { type: string }
+        phone: { type: string }
+        campaignId: { type: string }
+        campaignTitle: { type: string }
+        userId: { type: ["string", "null"] }
+        customerName: { type: ["string", "null"] }
+        status: { type: string, enum: [sent, failed, pending, unsent, opted_out] }
+        errorReason: { type: ["string", "null"] }
+        senderPhone: { type: ["string", "null"] }
+        sentAt: { type: ["string", "null"], format: date-time }
+      required: [id, phone, campaignId, campaignTitle, userId, customerName, status, errorReason, senderPhone, sentAt]
+    ResultPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Result" }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+      required: [items, total, page, pageSize]
+    ResultSummary:
+      type: object
+      properties:
+        totalProcessed: { type: integer }
+        sent: { type: integer }
+        failed: { type: integer }
+        pending: { type: integer }
+        unsent: { type: integer }
+        optedOut: { type: integer }
+        successRate: { type: number }
+      required: [totalProcessed, sent, failed, pending, unsent, optedOut, successRate]
+    CampaignResultSummary:
+      type: object
+      properties:
+        campaign: { $ref: "#/components/schemas/Campaign" }
+        summary: { $ref: "#/components/schemas/ResultSummary" }
+      required: [campaign, summary]
+    Wallet:
+      type: object
+      properties:
+        mainBalance: { type: integer }
+        pendingBalance: { type: integer }
+        lifetimeEarnings: { type: integer }
+        referralEarnings: { type: integer }
+        perMessage: { type: integer }
+        minimumWithdrawal: { type: integer }
+        transactions:
+          type: array
+          items: { $ref: "#/components/schemas/Transaction" }
+      required: [mainBalance, pendingBalance, lifetimeEarnings, referralEarnings, perMessage, minimumWithdrawal, transactions]
+    Transaction:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [earning, referral, withdrawal] }
+        amount: { type: integer }
+        status: { type: string, enum: [pending, main, completed, rejected] }
+        description: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, type, amount, status, description, createdAt]
+    ReferralSummary:
+      type: object
+      properties:
+        code: { type: string }
+        downlineCount: { type: integer }
+        totalEarnings: { type: integer }
+        bonusPerMessage: { type: integer }
+        downlines:
+          type: array
+          items: { $ref: "#/components/schemas/Downline" }
+      required: [code, downlineCount, totalEarnings, bonusPerMessage, downlines]
+    Downline:
+      type: object
+      properties:
+        name: { type: string }
+        joinedAt: { type: string, format: date-time }
+        sentCount: { type: integer }
+        earnings: { type: integer }
+      required: [name, joinedAt, sentCount, earnings]
+    Withdrawal:
+      type: object
+      properties:
+        id: { type: string }
+        amount: { type: integer }
+        method: { type: string }
+        accountName: { type: string }
+        accountNumber: { type: string }
+        accountNumberMasked: { type: string }
+        status: { type: string, enum: [pending, approved, rejected, paid] }
+        note: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+      required: [id, amount, method, accountName, accountNumberMasked, status, note, createdAt]
+    WithdrawalInput:
+      type: object
+      properties:
+        amount: { type: integer, minimum: 15000 }
+        method: { type: string, enum: [bank, ewallet] }
+        accountName: { type: string, minLength: 2 }
+        accountNumber: { type: string, minLength: 6 }
+      required: [amount, method, accountName, accountNumber]
+    WithdrawalReview:
+      type: object
+      properties:
+        status: { type: string, enum: [approved, rejected, paid] }
+        note: { type: string }
+      required: [status]
+    UserStatusInput:
+      type: object
+      properties:
+        status: { type: string, enum: [active, blocked] }
+      required: [status]
+    AppSettings:
+      type: object
+      properties:
+        perMessage: { type: integer }
+        referralBonus: { type: integer }
+        minimumWithdrawal: { type: integer }
+        pendingReleaseHours: { type: integer }
+        maxMessagesPerSessionPerHour: { type: integer }
+        allowDisconnectRequeue: { type: boolean }
+      required: [perMessage, referralBonus, minimumWithdrawal, pendingReleaseHours, maxMessagesPerSessionPerHour, allowDisconnectRequeue]
+    SettingsUpdate:
+      type: object
+      properties:
+        perMessage: { type: integer, minimum: 0 }
+        referralBonus: { type: integer, minimum: 0 }
+        minimumWithdrawal: { type: integer, minimum: 15000 }
+        pendingReleaseHours: { type: integer, minimum: 0, maximum: 720 }
+        maxMessagesPerSessionPerHour: { type: integer, minimum: 1, maximum: 60 }
+        allowDisconnectRequeue: { type: boolean }
 
