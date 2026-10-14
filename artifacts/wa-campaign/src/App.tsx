@@ -845,9 +845,88 @@ function AdminWaSessionsPage() {
 }
 
 function SettingsPage() {
-  const q = useGetSettings(); const update = useUpdateSettings(); const qc = useQueryClient(); const [values, setValues] = useState<AppSettings | null>(null); const [saved, setSaved] = useState(false); if (q.isLoading) return <LoadingBlock />; if (q.isError) return <ErrorBlock retry={() => q.refetch()} />;
-  const settings = values || q.data; if (!settings) return <Empty title="Pengaturan belum tersedia" text="Coba muat kembali." />;
-  return <div className="settings-layout"><section className="panel settings-form-panel"><SectionTitle title="Tarif & batas operasional" detail="Perubahan berlaku untuk perhitungan dan pekerjaan baru." action={<span className="secure-badge"><ShieldCheck size={13} /> Khusus admin</span>} /><div className="settings-fields"><label>Tarif per pesan terkirim<span>Imbalan customer per pesan berhasil</span><div className="setting-input"><span>Rp</span><input type="number" min="0" value={settings.perMessage} onChange={e => { setValues({ ...settings, perMessage: Number(e.target.value) }); setSaved(false); }} /></div></label><label>Bonus referral per pesan<span>Bonus referral dari setiap pesan downline</span><div className="setting-input"><span>Rp</span><input type="number" min="0" value={settings.referralBonus} onChange={e => { setValues({ ...settings, referralBonus: Number(e.target.value) }); setSaved(false); }} /></div></label><label>Minimum penarikan<span>Batas minimum pengajuan pencairan</span><div className="setting-input"><span>Rp</span><input type="number" min="15000" value={settings.minimumWithdrawal} onChange={e => { setValues({ ...settings, minimumWithdrawal: Number(e.target.value) }); setSaved(false); }} /></div></label><label>Waktu rilis saldo tertunda<span>Jam sebelum pendapatan dapat ditarik</span><div className="setting-input"><input type="number" min="0" max="720" value={settings.pendingReleaseHours} onChange={e => { setValues({ ...settings, pendingReleaseHours: Number(e.target.value) }); setSaved(false); }} /><span>jam</span></div></label><label>Batas pesan per sesi per jam<span>Pembatas operasional setiap sesi</span><div className="setting-input"><input type="number" min="1" max="60" value={settings.maxMessagesPerSessionPerHour} onChange={e => { setValues({ ...settings, maxMessagesPerSessionPerHour: Number(e.target.value) }); setSaved(false); }} /><span>pesan / jam</span></div></label><label>Sesi idle sebelum nonaktif<span>Jeda tanpa pengiriman setelah pekerjaan selesai</span><div className="setting-input"><input type="number" min="1" max="1440" value={settings.sessionIdleMinutes} onChange={e => { setValues({ ...settings, sessionIdleMinutes: Number(e.target.value) }); setSaved(false); }} /><span>menit</span></div></label></div><div className="setting-toggle-row"><div><b>Masukkan ulang saat sesi terputus</b><span>Kontak tertunda dapat dipertimbangkan kembali setelah sesi pulih.</span></div><button role="switch" aria-checked={Boolean(settings.allowDisconnectRequeue)} className={`toggle-switch ${settings.allowDisconnectRequeue ? 'toggle-on' : ''}`} onClick={() => { setValues({ ...settings, allowDisconnectRequeue: !settings.allowDisconnectRequeue }); setSaved(false); }}><i /></button></div><div className="settings-save-row">{saved && <span className="inline-success"><CheckCircle2 size={14} /> Pengaturan disimpan</span>}<button className="button button-primary" disabled={update.isPending} onClick={() => update.mutate({ data: settings }, { onSuccess: () => { setSaved(true); qc.setQueryData(getGetSettingsQueryKey(), settings); qc.invalidateQueries({ queryKey: getGetSettingsQueryKey() }); qc.invalidateQueries({ queryKey: getGetWalletQueryKey() }); }, onError: () => setSaved(false) })}>{update.isPending ? 'Menyimpan...' : 'Simpan pengaturan'}<ArrowUpRight size={15} /></button></div></section><aside className="settings-aside"><div className="settings-note"><div className="note-icon"><ShieldCheck size={18} /></div><div className="eyebrow">PRAKTIK TERJAGA</div><h3>Operasi tanpa<br />rotasi otomatis.</h3><p>Sesi WhatsApp tetap dikendalikan oleh pemilik akun. Tidak ada pergantian akun otomatis.</p></div><div className="settings-note light-note"><div className="note-icon"><Activity size={18} /></div><b>Batas pengiriman</b><p>Jeda pengiriman yang tersedia adalah 1, 5, 15, dan 30 detik. Batas per jam ini melengkapi jeda yang dipilih sender.</p></div></aside></div>;
+  const q = useGetSettings();
+  const update = useUpdateSettings();
+  const qc = useQueryClient();
+  const [values, setValues] = useState<AppSettings | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  if (q.isLoading) return <LoadingBlock />;
+  if (q.isError) return <ErrorBlock retry={() => q.refetch()} />;
+
+  const settings = values || q.data;
+  if (!settings) return <Empty title="Pengaturan belum tersedia" text="Coba muat kembali." />;
+
+  const validateSettings = () => {
+    const integerFields: [string, number, number, number][] = [
+      ['Tarif per pesan', settings.perMessage, 0, Number.MAX_SAFE_INTEGER],
+      ['Bonus referral', settings.referralBonus, 0, Number.MAX_SAFE_INTEGER],
+      ['Minimum penarikan', settings.minimumWithdrawal, 15000, Number.MAX_SAFE_INTEGER],
+      ['Waktu rilis saldo tertunda', settings.pendingReleaseHours, 0, 720],
+      ['Batas pesan per sesi per jam', settings.maxMessagesPerSessionPerHour, 1, 60],
+      ['Sesi idle sebelum nonaktif', settings.sessionIdleMinutes, 1, 1440],
+    ];
+    for (const [label, value, min, max] of integerFields) {
+      if (!Number.isInteger(value) || value < min || value > max) {
+        return `${label}: masukkan bilangan bulat antara ${min.toLocaleString('id-ID')} dan ${max === Number.MAX_SAFE_INTEGER ? 'tanpa batas maksimum' : max.toLocaleString('id-ID')}.`;
+      }
+    }
+    return '';
+  };
+
+  const save = () => {
+    setSaved(false);
+    const validationError = validateSettings();
+    if (validationError) {
+      setSaveError(validationError);
+      return;
+    }
+    setSaveError('');
+    update.mutate(
+      { data: settings },
+      {
+        onSuccess: savedSettings => {
+          setSaved(true);
+          setSaveError('');
+          setValues(savedSettings);
+          qc.setQueryData(getGetSettingsQueryKey(), savedSettings);
+          void qc.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+          void qc.invalidateQueries({ queryKey: getGetWalletQueryKey() });
+        },
+        onError: error => {
+          setSaved(false);
+          setSaveError(error instanceof Error ? error.message : 'Pengaturan gagal disimpan.');
+        },
+      },
+    );
+  };
+
+  return <div className="settings-layout">
+    <section className="panel settings-form-panel">
+      <SectionTitle title="Tarif & batas operasional" detail="Perubahan berlaku untuk perhitungan dan pekerjaan baru." action={<span className="secure-badge"><ShieldCheck size={13} /> Khusus admin</span>} />
+      <div className="settings-fields">
+        <label>Tarif per pesan terkirim<span>Imbalan customer per pesan berhasil · bilangan bulat ≥ Rp0</span><div className="setting-input"><span>Rp</span><input type="number" min="0" step="1" value={settings.perMessage} onChange={e => { setValues({ ...settings, perMessage: Number(e.target.value) }); setSaved(false); setSaveError(''); }} /></div></label>
+        <label>Bonus referral per pesan<span>Bonus referral dari setiap pesan downline · bilangan bulat ≥ Rp0</span><div className="setting-input"><span>Rp</span><input type="number" min="0" step="1" value={settings.referralBonus} onChange={e => { setValues({ ...settings, referralBonus: Number(e.target.value) }); setSaved(false); setSaveError(''); }} /></div></label>
+        <label>Minimum penarikan<span>Batas minimum pengajuan pencairan · minimal Rp15.000</span><div className="setting-input"><span>Rp</span><input type="number" min="15000" step="1" value={settings.minimumWithdrawal} onChange={e => { setValues({ ...settings, minimumWithdrawal: Number(e.target.value) }); setSaved(false); setSaveError(''); }} /></div></label>
+        <label>Waktu rilis saldo tertunda<span>Jam sebelum pendapatan dapat ditarik · 0–720 jam</span><div className="setting-input"><input type="number" min="0" max="720" step="1" value={settings.pendingReleaseHours} onChange={e => { setValues({ ...settings, pendingReleaseHours: Number(e.target.value) }); setSaved(false); setSaveError(''); }} /><span>jam</span></div></label>
+        <label>Batas pesan per sesi per jam<span>Pembatas operasional setiap sesi · 1–60 pesan</span><div className="setting-input"><input type="number" min="1" max="60" step="1" value={settings.maxMessagesPerSessionPerHour} onChange={e => { setValues({ ...settings, maxMessagesPerSessionPerHour: Number(e.target.value) }); setSaved(false); setSaveError(''); }} /><span>pesan / jam</span></div></label>
+        <label>Sesi idle sebelum nonaktif<span>Jeda tanpa pengiriman setelah pekerjaan selesai · 1–1.440 menit</span><div className="setting-input"><input type="number" min="1" max="1440" step="1" value={settings.sessionIdleMinutes} onChange={e => { setValues({ ...settings, sessionIdleMinutes: Number(e.target.value) }); setSaved(false); setSaveError(''); }} /><span>menit</span></div></label>
+      </div>
+      <div className="setting-toggle-row">
+        <div><b>Masukkan ulang saat sesi terputus</b><span>Kontak tertunda dapat dipertimbangkan kembali setelah sesi pulih.</span></div>
+        <button role="switch" aria-checked={Boolean(settings.allowDisconnectRequeue)} className={`toggle-switch ${settings.allowDisconnectRequeue ? 'toggle-on' : ''}`} onClick={() => { setValues({ ...settings, allowDisconnectRequeue: !settings.allowDisconnectRequeue }); setSaved(false); setSaveError(''); }}><i /></button>
+      </div>
+      <div className="settings-save-row">
+        {saved && <span className="inline-success"><CheckCircle2 size={14} /> Pengaturan disimpan</span>}
+        <button className="button button-primary" disabled={update.isPending} onClick={save}>{update.isPending ? 'Menyimpan...' : 'Simpan pengaturan'}<ArrowUpRight size={15} /></button>
+      </div>
+      {saveError && <div className="inline-error settings-save-error"><CircleAlert size={15} /> {saveError}</div>}
+    </section>
+    <aside className="settings-aside">
+      <div className="settings-note"><div className="note-icon"><ShieldCheck size={18} /></div><div className="eyebrow">PRAKTIK TERJAGA</div><h3>Operasi tanpa<br />rotasi otomatis.</h3><p>Sesi WhatsApp tetap dikendalikan oleh pemilik akun. Tidak ada pergantian akun otomatis.</p></div>
+      <div className="settings-note light-note"><div className="note-icon"><Activity size={18} /></div><b>Batas pengiriman</b><p>Jeda pengiriman yang tersedia adalah 1, 5, 15, dan 30 detik. Batas per jam ini melengkapi jeda yang dipilih sender.</p></div>
+    </aside>
+  </div>;
 }
 
 function Forbidden() { return <div className="panel empty-panel"><ShieldCheck size={24} /><b>Akses administrator diperlukan</b><span>Halaman ini hanya tersedia untuk administrator.</span><Link href="/" className="button button-secondary">Kembali ke ringkasan</Link></div>; }
