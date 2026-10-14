@@ -605,20 +605,25 @@ export async function sendWhatsAppMessage(
         )
       : undefined;
     buttonMessage = proto.Message.fromObject({
-      templateMessage: {
-        hydratedTemplate: {
-          hydratedContentText: content.text,
-          hydratedFooterText: "Balas BERHENTI untuk berhenti menerima pesan.",
-          hydratedButtons: [
+      interactiveMessage: {
+        header: {
+          hasMediaAttachment: Boolean(media?.imageMessage),
+          ...(media?.imageMessage ? { imageMessage: media.imageMessage } : {}),
+        },
+        body: { text: content.text },
+        footer: { text: "Balas BERHENTI untuk berhenti menerima pesan." },
+        nativeFlowMessage: {
+          buttons: [
             {
-              index: 0,
-              urlButton: {
-                displayText: ctaText || "Buka tautan",
+              name: "cta_url",
+              buttonParamsJson: JSON.stringify({
+                display_text: ctaText || "Buka tautan",
                 url: ctaUrl,
-              },
+                merchant_url: ctaUrl,
+              }),
             },
           ],
-          ...(media?.imageMessage ? { imageMessage: media.imageMessage } : {}),
+          messageVersion: 1,
         },
       },
     });
