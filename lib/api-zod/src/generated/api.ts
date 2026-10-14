@@ -465,12 +465,40 @@ export const ImportContactsBody = zod.object({
   "campaignId": zod.string(),
   "contacts": zod.array(zod.object({
   "phone": zod.string().min(importContactsBodyContactsItemPhoneMin),
-  "consentSource": zod.string().min(importContactsBodyContactsItemConsentSourceMin),
-  "consentAt": zod.coerce.date()
-})).min(1).max(importContactsBodyContactsMax)
+  "consentSource": zod.string().min(importContactsBodyContactsItemConsentSourceMin).optional(),
+  "consentAt": zod.coerce.date().optional()
+})).min(1).max(importContactsBodyContactsMax),
+  "consentConfirmed": zod.boolean().optional()
 })
 
 export const ImportContactsResponse = zod.object({
+  "added": zod.number().int(),
+  "duplicates": zod.number().int(),
+  "invalid": zod.number().int(),
+  "consentMissing": zod.number().int()
+})
+
+
+/**
+ * @summary Download a one-column phone contact template
+ */
+export const DownloadContactTemplateParams = zod.object({
+  "format": zod.enum(['csv', 'xlsx'])
+})
+
+export const DownloadContactTemplateResponse = zod.unknown()
+
+
+/**
+ * @summary Import phone contacts from a CSV or Excel file
+ */
+export const ImportContactsFileBody = zod.object({
+  "campaignId": zod.string(),
+  "consentConfirmed": zod.enum(['true']),
+  "file": zod.instanceof(Blob)
+})
+
+export const ImportContactsFileResponse = zod.object({
   "added": zod.number().int(),
   "duplicates": zod.number().int(),
   "invalid": zod.number().int(),

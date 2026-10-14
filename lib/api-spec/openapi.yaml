@@ -400,6 +400,46 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ImportResult"
+  /admin/contacts/template/{format}:
+    get:
+      operationId: downloadContactTemplate
+      tags: [contacts, admin]
+      summary: Download a one-column phone contact template
+      parameters:
+        - name: format
+          in: path
+          required: true
+          schema: { type: string, enum: [csv, xlsx] }
+      responses:
+        "200":
+          description: CSV or Excel contact template
+          content:
+            text/csv:
+              schema: { type: string }
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+  /admin/contacts/import-file:
+    post:
+      operationId: importContactsFile
+      tags: [contacts, admin]
+      summary: Import phone contacts from a CSV or Excel file
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ContactFileImportInput"
+      responses:
+        "201":
+          description: Import summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResult"
+        "400":
+          description: Invalid file or missing consent confirmation
+        "413":
+          description: File exceeds the 5 MB limit
   /admin/contacts/{contactId}:
     delete:
       operationId: deleteContact
@@ -914,7 +954,7 @@ components:
         phone: { type: string, minLength: 8 }
         consentSource: { type: string, minLength: 2 }
         consentAt: { type: string, format: date-time }
-      required: [phone, consentSource, consentAt]
+      required: [phone]
     ContactImportInput:
       type: object
       properties:
@@ -924,7 +964,15 @@ components:
           items: { $ref: "#/components/schemas/ContactImportItem" }
           minItems: 1
           maxItems: 1000
+        consentConfirmed: { type: boolean }
       required: [campaignId, contacts]
+    ContactFileImportInput:
+      type: object
+      properties:
+        campaignId: { type: string }
+        consentConfirmed: { type: string, enum: ["true"] }
+        file: { type: string, format: binary }
+      required: [campaignId, consentConfirmed, file]
     ImportResult:
       type: object
       properties:

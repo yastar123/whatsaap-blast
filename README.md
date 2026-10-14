@@ -20,7 +20,7 @@ Titipkirim adalah dashboard berbahasa Indonesia untuk mengelola kampanye WhatsAp
 
 - **Ringkasan** — metrik customer, sesi online, jumlah pesan terkirim, dan nilai pendapatan yang dibayarkan.
 - **Kampanye** — membuat, mengubah, mengaktifkan, dan menghapus kampanye yang memenuhi syarat; gambar bisa dipilih dari perangkat (JPG, PNG, WebP, atau GIF, maksimal 25 MB) atau menggunakan URL.
-- **Kontak & consent** — mengimpor baris `nomor, sumber consent, waktu ISO`, mencari/memfilter kontak, melihat status serta bukti consent, dan menghapus kontak.
+- **Kontak & consent** — mengimpor satu nomor telepon per baris atau mengunggah CSV/XLSX satu kolom dari template yang tersedia di halaman, mencari/memfilter kontak, melihat catatan konfirmasi consent, dan menghapus kontak.
 - **Akun pengirim** — mencari customer dan mengaktifkan atau memblokir akunnya.
 - **Sesi semua pengirim** — memantau dan memutus sesi WhatsApp milik customer.
 - **Pengaturan** — mengubah tarif per pesan, bonus referral, minimum penarikan, jam tunggu pelepasan saldo, batas pesan per sesi per jam, masa idle sesi, dan kebijakan antrekan ulang setelah sesi terputus.
@@ -31,7 +31,7 @@ Halaman terdaftar: `/`, `/login`, `/register`, `/whatsapp`, `/blast`, `/results`
 ## Aturan operasional
 
 1. Admin membuat kampanye, memasukkan naskah, mengimpor nomor, lalu mengaktifkan kampanye.
-2. Saat impor, setiap kontak harus memiliki nomor valid, sumber consent, dan tanggal/waktu persetujuan yang tidak berada di masa depan. Nomor dinormalisasi ke angka; nomor duplikat di kampanye yang sama tidak dimasukkan ulang.
+2. Impor kontak meminta admin mengonfirmasi bahwa setiap nomor sudah menyetujui pesan WhatsApp. Konfirmasi dan waktunya dicatat sebagai sumber consent; format kontak hanya memerlukan nomor telepon. Template CSV/XLSX satu kolom dapat diunduh dari halaman Kontak. Nomor dinormalisasi ke angka; nomor duplikat di kampanye yang sama tidak dimasukkan ulang.
 3. Pekerja blast memeriksa ulang bahwa sumber dan waktu consent ada serta consent belum dicabut sebelum mengklaim kontak. Klaim menggunakan penguncian database agar sesi paralel tidak mengambil kontak yang sama.
 4. Customer harus mempunyai sesi WhatsApp **online** untuk memulai blast. Sesi yang sudah online berjalan paralel; laju tetap dibatasi oleh jeda pilihan dan batas per jam pada pengaturan.
 5. Progres dan status sesi/pesan dipublikasikan melalui Socket.IO. Hasil juga tersimpan di database dan dapat diekspor.
@@ -73,7 +73,7 @@ Semua route HTTP tersedia dengan prefiks `/api`; dokumentasi request/response le
 | Sesi customer | `GET/POST /wa-sessions`, `POST /wa-sessions/{sessionId}/connect`, `DELETE /wa-sessions/{sessionId}` |
 | Sesi admin | `GET /admin/wa-sessions`, `DELETE /admin/wa-sessions/{sessionId}` |
 | Kampanye | `GET/POST /admin/campaigns`, `PATCH/DELETE /admin/campaigns/{campaignId}`, `POST /admin/campaigns/{campaignId}/activate`, `POST /admin/campaign-images` (upload gambar, maksimal 25 MB) |
-| Kontak | `GET/POST /admin/contacts`, `DELETE /admin/contacts/{contactId}` |
+| Kontak | `GET/POST /admin/contacts`, `GET /admin/contacts/template/{csv|xlsx}`, `POST /admin/contacts/import-file`, `DELETE /admin/contacts/{contactId}` |
 | Customer | `GET /admin/users`, `PATCH /admin/users/{userId}/status` |
 | Blast | `POST /blast/start`, `POST /blast/cancel`, `GET /blast/current` |
 | Hasil | `GET /results`, `/results/summary`, `/results/campaigns`, `/results/export` |

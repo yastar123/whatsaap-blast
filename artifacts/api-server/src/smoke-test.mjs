@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import ExcelJS from "exceljs";
 import { pool } from "@workspace/db";
 
 if (process.env.NODE_ENV === "production") {
@@ -383,6 +384,108 @@ async function apiTests() {
       "duplicate contact is not inserted twice",
       duplicateImport.data?.added === 0 && duplicateImport.data?.duplicates === 1,
     );
+    const confirmedPhone = `${testPhone.slice(0, -1)}${(Number(testPhone.slice(-1)) + 1) % 10}`;
+    const unconfirmedImport = await request("/admin/contacts", {
+      method: "POST",
+      token: admin.accessToken,
+      body: {
+        campaignId: created.campaignId,
+        contacts: [{ phone: confirmedPhone }],
+      },
+    });
+    expectStatus("phone-only import requires consent confirmation", unconfirmedImport, 201);
+    check(
+      "unconfirmed phone-only contact is not made eligible",
+      unconfirmedImport.data?.added === 0 && unconfirmedImport.data?.consentMissing === 1,
+    );
+    const confirmedImport = await request("/admin/contacts", {
+      method: "POST",
+      token: admin.accessToken,
+      body: {
+        campaignId: created.campaignId,
+        contacts: [{ phone: confirmedPhone }],
+        consentConfirmed: true,
+      },
+    });
+    expectStatus("admin imports phone-only contacts after consent confirmation", confirmedImport, 201);
+    check(
+      "phone-only import records the admin consent confirmation",
+      confirmedImport.data?.added === 1 && confirmedImport.data?.consentMissing === 0,
+    );
+    const csvTemplate = await request("/admin/contacts/template/csv", {
+      token: admin.accessToken,
+    });
+    expectStatus("admin downloads a CSV contact template", csvTemplate, 200);
+    check("CSV contact template has a phone-only header", csvTemplate.data === "nomor");
+    const xlsxTemplateResponse = await fetch(`${apiBase}/admin/contacts/template/xlsx`, {
+      headers: { authorization: "Bearer " + admin.accessToken },
+    });
+    const xlsxTemplate = await xlsxTemplateResponse.arrayBuffer();
+    expectStatus(
+      "admin downloads an Excel contact template",
+      { status: xlsxTemplateResponse.status },
+      200,
+    );
+    check(
+      "Excel contact template is a workbook",
+      xlsxTemplate.byteLength > 100,
+    );
+    const uploadedPhone = `08${suffix.replace(/\D/g, "").padEnd(10, "8").slice(0, 10)}`;
+    const uploadForm = new FormData();
+    uploadForm.set("campaignId", created.campaignId);
+    uploadForm.set("consentConfirmed", "true");
+    uploadForm.set(
+      "file",
+      new Blob([`nomor\r\n${uploadedPhone}\r\n`], { type: "text/csv" }),
+      "kontak.csv",
+    );
+    const uploadedContactsResponse = await fetch(`${apiBase}/admin/contacts/import-file`, {
+      method: "POST",
+      headers: { authorization: "Bearer " + admin.accessToken },
+      body: uploadForm,
+    });
+    const uploadedContacts = await uploadedContactsResponse.json();
+    expectStatus(
+      "admin imports contacts from a phone-only CSV",
+      { status: uploadedContactsResponse.status },
+      201,
+    );
+    check(
+      "CSV import adds its phone number",
+      uploadedContacts.added === 1 && uploadedContacts.invalid === 0,
+    );
+    const importedLocalPhone = `62${uploadedPhone.slice(1)}`;
+    const importedLocalContact = await request(
+      `/admin/contacts?campaignId=${created.campaignId}&search=${importedLocalPhone}`,
+      { token: admin.accessToken },
+    );
+    check(
+      "CSV import preserves leading zeroes before phone normalization",
+      importedLocalContact.data?.items?.some((item) => item.phone === importedLocalPhone),
+    );
+    const xlsxBook = new ExcelJS.Workbook();
+    const xlsxSheet = xlsxBook.addWorksheet("Kontak");
+    xlsxSheet.columns = [{ header: "nomor", key: "nomor", width: 24, style: { numFmt: "@" } }];
+    const xlsxPhone = `${testPhone.slice(0, -1)}${(Number(testPhone.slice(-1)) + 3) % 10}`;
+    xlsxSheet.addRow({ nomor: xlsxPhone });
+    const xlsxUploadForm = new FormData();
+    xlsxUploadForm.set("campaignId", created.campaignId);
+    xlsxUploadForm.set("consentConfirmed", "true");
+    xlsxUploadForm.set(
+      "file",
+      new Blob([Buffer.from(await xlsxBook.xlsx.writeBuffer())], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }),
+      "kontak.xlsx",
+    );
+    const xlsxUploadResponse = await fetch(`${apiBase}/admin/contacts/import-file`, {
+      method: "POST",
+      headers: { authorization: "Bearer " + admin.accessToken },
+      body: xlsxUploadForm,
+    });
+    const xlsxUpload = await xlsxUploadResponse.json();
+    expectStatus("admin imports contacts from an Excel file", { status: xlsxUploadResponse.status }, 201);
+    check("Excel import adds its phone number", xlsxUpload.added === 1 && xlsxUpload.invalid === 0);
     const importedContacts = await request(
       `/admin/contacts?campaignId=${created.campaignId}&search=${testPhone}`,
       { token: admin.accessToken },

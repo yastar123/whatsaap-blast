@@ -27,6 +27,8 @@ export * from './campaignStatus';
 export * from './campaignUpdate';
 export * from './campaignUpdateStatus';
 export * from './contact';
+export * from './contactFileImportInput';
+export * from './contactFileImportInputConsentConfirmed';
 export * from './contactImportInput';
 export * from './contactImportItem';
 export * from './contactPage';

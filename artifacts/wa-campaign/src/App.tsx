@@ -22,7 +22,7 @@ import {
   useListWithdrawals, useListAdminWaSessions, useDisconnectAdminWaSession,
   useLogin, useRegister, useLogout, useCreateWaSession, useConnectWaSession,
   useDeleteWaSession, useCreateCampaign, useUpdateCampaign, useDeleteCampaign, useActivateCampaign,
-  useImportContacts, useDeleteContact, useStartBlast, useCancelBlast, useRequestWithdrawal,
+  useImportContacts, useImportContactsFile, useDeleteContact, useStartBlast, useCancelBlast, useRequestWithdrawal,
   useUpdateWithdrawal, useUpdateUserStatus, useUpdateSettings, setAuthTokenGetter,
   uploadCampaignImage
 } from '@workspace/api-client-react';
@@ -582,11 +582,108 @@ function CampaignsPage() {
 }
 
 function ContactsPage() {
-  const campaigns = useListCampaigns(); const [campaignId, setCampaignId] = useState(''); const [search, setSearch] = useState(''); const [page, setPage] = useState(1); const [importText, setImportText] = useState(''); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
-  const params = useMemo(() => ({ ...(campaignId ? { campaignId } : {}), ...(search ? { search } : {}), page, pageSize: 20 }), [campaignId, search, page]); const contacts = useListContacts(params, { query: { queryKey: getListContactsQueryKey(params) } }); const importer = useImportContacts(); const remove = useDeleteContact(); const qc = useQueryClient();
+  const campaigns = useListCampaigns();
+  const [campaignId, setCampaignId] = useState('');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [importText, setImportText] = useState('');
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [consentConfirmed, setConsentConfirmed] = useState(false);
+  const [downloadingTemplate, setDownloadingTemplate] = useState<'csv' | 'xlsx' | null>(null);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const params = useMemo(() => ({ ...(campaignId ? { campaignId } : {}), ...(search ? { search } : {}), page, pageSize: 20 }), [campaignId, search, page]);
+  const contacts = useListContacts(params, { query: { queryKey: getListContactsQueryKey(params) } });
+  const importer = useImportContacts();
+  const fileImporter = useImportContactsFile();
+  const remove = useDeleteContact();
+  const qc = useQueryClient();
+  const importing = importer.isPending || fileImporter.isPending;
   const refresh = () => { qc.invalidateQueries({ queryKey: getListContactsQueryKey(params) }); qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); };
-  const submitImport = () => { setError(''); setNotice(''); const rows = importText.trim().split(/\n/).filter(Boolean).map(line => line.split(',').map(v => v.trim())); const parsed = rows.map(row => ({ phone: row[0] || '', consentSource: row[1] || '', consentAt: row[2] || '' })); if (!campaignId) { setError('Pilih kampanye sebelum mengimpor kontak.'); return; } if (parsed.some(c => !c.phone || !c.consentSource || !c.consentAt || Number.isNaN(new Date(c.consentAt).getTime()))) { setError('Setiap baris harus berisi nomor, sumber consent, dan waktu ISO yang valid.'); return; } importer.mutate({ data: { campaignId, contacts: parsed } }, { onSuccess: result => { setNotice(`${result.added} kontak ditambahkan · ${result.duplicates} duplikat · ${result.invalid} tidak valid · ${result.consentMissing} tanpa consent`); setImportText(''); refresh(); }, onError: e => setError(e instanceof Error ? e.message : 'Impor tidak berhasil.') }); };
-  return <><div className="consent-banner"><div className="consent-banner-icon"><ShieldCheck size={20} /></div><div><b>Hanya impor dengan bukti persetujuan</b><p>Sertakan sumber consent dan waktu persetujuan untuk setiap nomor. Kontak tanpa data consent tidak dapat dimasukkan.</p></div><span className="consent-lock">VALIDASI WAJIB</span></div><div className="contacts-layout"><section className="panel import-panel"><SectionTitle title="Impor kontak" detail="Format CSV sederhana, satu kontak per baris." /><label>Kampanye tujuan<select value={campaignId} onChange={e => { setCampaignId(e.target.value); setPage(1); }}><option value="">Pilih kampanye</option>{campaigns.data?.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select></label><div className="import-format"><span>FORMAT BARIS</span><code>nomor, sumber consent, waktu ISO</code></div><textarea className="import-textarea" value={importText} onChange={e => setImportText(e.target.value)} placeholder={'6281212345678, Formulir situs, 2025-03-12T09:30:00Z'} rows={7} /><div className="import-hint"><CircleHelp size={14} /> Waktu persetujuan harus format tanggal yang dapat dibaca, disarankan ISO 8601.</div>{error && <div className="inline-error"><CircleAlert size={15} /> {error}</div>}{notice && <div className="inline-success"><CheckCircle2 size={15} /> {notice}</div>}<button className="button button-primary button-wide" onClick={submitImport} disabled={importer.isPending || !importText.trim()}><Upload size={15} /> {importer.isPending ? 'Memvalidasi & mengimpor...' : 'Validasi dan impor kontak'}</button></section><section className="panel contacts-list-panel"><SectionTitle title="Daftar kontak" detail={`${contacts.data?.total ?? 0} kontak`} /><div className="filter-bar"><div className="search-field"><Search size={16} /><input placeholder="Cari nomor..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div><select value={campaignId} onChange={e => setCampaignId(e.target.value)}><option value="">Semua kampanye</option>{campaigns.data?.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select></div><div className="table-scroll"><table><thead><tr><th>Nomor</th><th>Status</th><th>Sumber consent</th><th>Persetujuan</th><th /></tr></thead><tbody>{contacts.isLoading ? <tr><td colSpan={5}>Memuat daftar kontak...</td></tr> : contacts.data?.items.length ? contacts.data.items.map((c: Contact) => <tr key={c.id}><td className="mono">{c.phone}</td><td><Status value={c.status} /></td><td>{c.consentSource || '—'}{c.consentRevokedAt && <small className="error-reason">Dicabut {date(c.consentRevokedAt)}</small>}</td><td>{date(c.consentAt)}</td><td><button className="icon-button danger-icon" aria-label={`Hapus kontak ${c.phone}`} onClick={() => { if (window.confirm(`Hapus kontak ${c.phone}?`)) remove.mutate({ contactId: c.id }, { onSuccess: refresh }); }}><X size={15} /></button></td></tr>) : <tr><td colSpan={5}><Empty title="Belum ada kontak" text="Pilih kampanye dan impor kontak ber-consent." /></td></tr>}</tbody></table></div><div className="table-footer"><span>Halaman {page} · {contacts.data?.total ?? 0} kontak</span><div><button className="button button-secondary button-small" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Sebelumnya</button><button className="button button-secondary button-small" disabled={!contacts.data || page * contacts.data.pageSize >= contacts.data.total} onClick={() => setPage(p => p + 1)}>Berikutnya</button></div></div></section></div></>;
+  const showImportResult = (result: { added: number; duplicates: number; invalid: number; consentMissing: number }) => {
+    setNotice(`${result.added} kontak ditambahkan · ${result.duplicates} duplikat · ${result.invalid} tidak valid · ${result.consentMissing} tanpa consent`);
+    setImportText('');
+    setImportFile(null);
+    setConsentConfirmed(false);
+    refresh();
+  };
+  const downloadTemplate = async (format: 'csv' | 'xlsx') => {
+    setError('');
+    setDownloadingTemplate(format);
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error('Sesi admin berakhir. Silakan masuk kembali.');
+      const response = await fetch(`/api/admin/contacts/template/${format}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error('Template tidak dapat diunduh.');
+      const url = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `template-kontak.${format}`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Template tidak dapat diunduh.');
+    } finally {
+      setDownloadingTemplate(null);
+    }
+  };
+  const submitImport = () => {
+    setError('');
+    setNotice('');
+    if (!campaignId) { setError('Pilih kampanye sebelum mengimpor kontak.'); return; }
+    if (!consentConfirmed) { setError('Konfirmasi bahwa semua kontak sudah menyetujui pesan sebelum mengimpor.'); return; }
+    if (importFile) {
+      fileImporter.mutate({
+        data: { campaignId, consentConfirmed: 'true', file: importFile },
+      }, {
+        onSuccess: showImportResult,
+        onError: e => setError(e instanceof Error ? e.message : 'Impor file tidak berhasil.'),
+      });
+      return;
+    }
+    const phones = importText.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    if (!phones.length) { setError('Masukkan minimal satu nomor telepon.'); return; }
+    if (phones.length > 1000) { setError('Maksimal 1.000 nomor telepon per impor.'); return; }
+    if (phones.some(phone => !/^\+?[\d\s().-]+$/.test(phone))) {
+      setError('Masukkan hanya nomor telepon, satu nomor per baris.');
+      return;
+    }
+    importer.mutate({
+      data: { campaignId, contacts: phones.map(phone => ({ phone })), consentConfirmed: true },
+    }, {
+      onSuccess: showImportResult,
+      onError: e => setError(e instanceof Error ? e.message : 'Impor tidak berhasil.'),
+    });
+  };
+  return <>
+    <div className="consent-banner">
+      <div className="consent-banner-icon"><ShieldCheck size={20} /></div>
+      <div><b>Impor hanya kontak yang sudah memberi persetujuan</b><p>Konfirmasi saat impor akan dicatat sebagai sumber dan waktu persetujuan. Jangan impor nomor tanpa consent.</p></div>
+      <span className="consent-lock">KONFIRMASI ADMIN</span>
+    </div>
+    <div className="contacts-layout">
+      <section className="panel import-panel">
+        <SectionTitle title="Impor kontak" detail="Masukkan satu nomor telepon per baris atau unggah CSV/Excel." />
+        <label>Kampanye tujuan<select value={campaignId} onChange={e => { setCampaignId(e.target.value); setPage(1); }}><option value="">Pilih kampanye</option>{campaigns.data?.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select></label>
+        <div className="import-format"><span>TEMPLATE NOMOR TELEPON</span><div><button type="button" className="button button-secondary button-small" disabled={downloadingTemplate !== null} onClick={() => void downloadTemplate('csv')}><Download size={13} /> {downloadingTemplate === 'csv' ? 'Mengunduh…' : 'CSV'}</button><button type="button" className="button button-secondary button-small" disabled={downloadingTemplate !== null} onClick={() => void downloadTemplate('xlsx')}><Download size={13} /> {downloadingTemplate === 'xlsx' ? 'Mengunduh…' : 'Excel'}</button></div></div>
+        <label>Nomor telepon <span className="optional">SATU NOMOR PER BARIS</span><textarea className="import-textarea" value={importText} onChange={e => { setImportText(e.target.value); setImportFile(null); }} placeholder={'081234567890\n6281234567890'} rows={5} /></label>
+        <label>Atau unggah file kontak <span className="optional">CSV / XLSX · MAKS. 5 MB</span><input type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={e => { const file = e.currentTarget.files?.[0] ?? null; if (file && file.size > 5 * 1024 * 1024) { setImportFile(null); setError('Ukuran file maksimal 5 MB.'); return; } setError(''); setImportFile(file); if (file) setImportText(''); }} />{importFile && <span className="optional">{importFile.name}</span>}</label>
+        <div className="import-hint"><CircleHelp size={14} /> Gunakan template satu kolom bernama “nomor”. File maksimal 5 MB dan 1.000 nomor.</div>
+        <label className="consent-confirmation"><input type="checkbox" checked={consentConfirmed} onChange={e => setConsentConfirmed(e.target.checked)} /> Saya memastikan semua nomor yang diimpor telah memberi persetujuan untuk menerima pesan WhatsApp.</label>
+        {error && <div className="inline-error"><CircleAlert size={15} /> {error}</div>}
+        {notice && <div className="inline-success"><CheckCircle2 size={15} /> {notice}</div>}
+        <button className="button button-primary button-wide" onClick={submitImport} disabled={importing || !campaignId || (!importText.trim() && !importFile) || !consentConfirmed}><Upload size={15} /> {importing ? 'Memvalidasi & mengimpor...' : 'Validasi dan impor kontak'}</button>
+      </section>
+      <section className="panel contacts-list-panel">
+        <SectionTitle title="Daftar kontak" detail={`${contacts.data?.total ?? 0} kontak`} />
+        <div className="filter-bar"><div className="search-field"><Search size={16} /><input placeholder="Cari nomor..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div><select value={campaignId} onChange={e => setCampaignId(e.target.value)}><option value="">Semua kampanye</option>{campaigns.data?.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select></div>
+        <div className="table-scroll"><table><thead><tr><th>Nomor</th><th>Status</th><th>Sumber consent</th><th>Persetujuan</th><th /></tr></thead><tbody>{contacts.isLoading ? <tr><td colSpan={5}>Memuat daftar kontak...</td></tr> : contacts.data?.items.length ? contacts.data.items.map((c: Contact) => <tr key={c.id}><td className="mono">{c.phone}</td><td><Status value={c.status} /></td><td>{c.consentSource || '—'}{c.consentRevokedAt && <small className="error-reason">Dicabut {date(c.consentRevokedAt)}</small>}</td><td>{date(c.consentAt)}</td><td><button className="icon-button danger-icon" aria-label={`Hapus kontak ${c.phone}`} onClick={() => { if (window.confirm(`Hapus kontak ${c.phone}?`)) remove.mutate({ contactId: c.id }, { onSuccess: refresh }); }}><X size={15} /></button></td></tr>) : <tr><td colSpan={5}><Empty title="Belum ada kontak" text="Pilih kampanye dan impor kontak yang sudah memberi consent." /></td></tr>}</tbody></table></div>
+        <div className="table-footer"><span>Halaman {page} · {contacts.data?.total ?? 0} kontak</span><div><button className="button button-secondary button-small" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Sebelumnya</button><button className="button button-secondary button-small" disabled={!contacts.data || page * contacts.data.pageSize >= contacts.data.total} onClick={() => setPage(p => p + 1)}>Berikutnya</button></div></div>
+      </section>
+    </div>
+  </>;
 }
 
 function CustomersPage() {

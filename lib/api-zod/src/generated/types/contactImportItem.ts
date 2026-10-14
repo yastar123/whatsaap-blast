@@ -10,6 +10,6 @@ export interface ContactImportItem {
   /** @minLength 8 */
   phone: string;
   /** @minLength 2 */
-  consentSource: string;
-  consentAt: Date;
+  consentSource?: string;
+  consentAt?: Date;
 }

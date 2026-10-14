@@ -33,6 +33,7 @@ import type {
   CampaignInput,
   CampaignResultSummary,
   CampaignUpdate,
+  ContactFileImportInput,
   ContactImportInput,
   ContactPage,
   CurrentBlastResponse,
@@ -1865,6 +1866,161 @@ export const useImportContacts = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getImportContactsMutationOptions(options));
+    }
+
+export const getDownloadContactTemplateUrl = (format: 'csv' | 'xlsx',) => {
+
+
+
+
+  return `/api/admin/contacts/template/${format}`
+}
+
+/**
+ * @summary Download a one-column phone contact template
+ */
+export const downloadContactTemplate = async (format: 'csv' | 'xlsx', options?: Parameters<typeof customFetch>[1]): Promise<string | Blob> => {
+
+  return customFetch<string | Blob>(getDownloadContactTemplateUrl(format),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadContactTemplateQueryKey = (format: 'csv' | 'xlsx',) => {
+    return [
+    `/api/admin/contacts/template/${format}`
+    ] as const;
+    }
+
+
+export const getDownloadContactTemplateQueryOptions = <TData = Awaited<ReturnType<typeof downloadContactTemplate>>, TError = ErrorType<unknown>>(format: 'csv' | 'xlsx', options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadContactTemplate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadContactTemplateQueryKey(format);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadContactTemplate>>> = ({ signal }) => downloadContactTemplate(format, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: format !== null && format !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadContactTemplate>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DownloadContactTemplateQueryResult = NonNullable<Awaited<ReturnType<typeof downloadContactTemplate>>>
+export type DownloadContactTemplateQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Download a one-column phone contact template
+ */
+
+export function useDownloadContactTemplate<TData = Awaited<ReturnType<typeof downloadContactTemplate>>, TError = ErrorType<unknown>>(
+ format: 'csv' | 'xlsx', options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadContactTemplate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDownloadContactTemplateQueryOptions(format,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getImportContactsFileUrl = () => {
+
+
+
+
+  return `/api/admin/contacts/import-file`
+}
+
+/**
+ * @summary Import phone contacts from a CSV or Excel file
+ */
+export const importContactsFile = async (contactFileImportInput: ContactFileImportInput, options?: Parameters<typeof customFetch>[1]): Promise<ImportResult> => {
+    const formData = new FormData();
+formData.append(`campaignId`, contactFileImportInput.campaignId);
+formData.append(`consentConfirmed`, contactFileImportInput.consentConfirmed);
+formData.append(`file`, contactFileImportInput.file);
+
+  return customFetch<ImportResult>(getImportContactsFileUrl(),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
+  }
+);}
+
+
+
+
+
+export const getImportContactsFileMutationKey = () => ['importContactsFile'] as const;
+
+export const getImportContactsFileMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importContactsFile>>, TError,ImportContactsFileMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importContactsFile>>, TError,ImportContactsFileMutationVariables, TContext> => {
+
+const mutationKey = getImportContactsFileMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importContactsFile>>, ImportContactsFileMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  importContactsFile(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportContactsFileMutationResult = NonNullable<Awaited<ReturnType<typeof importContactsFile>>>
+    export type ImportContactsFileMutationBody = BodyType<ContactFileImportInput>
+    export type ImportContactsFileMutationError = ErrorType<void>
+    export type ImportContactsFileMutationVariables = {data: BodyType<ContactFileImportInput>}
+
+    /**
+ * @summary Import phone contacts from a CSV or Excel file
+ */
+export const useImportContactsFile = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importContactsFile>>, TError,ImportContactsFileMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof importContactsFile>>,
+        TError,
+        ImportContactsFileMutationVariables,
+        TContext
+      > => {
+      return useMutation(getImportContactsFileMutationOptions(options));
     }
 
 export const getDeleteContactUrl = (contactId: string,) => {

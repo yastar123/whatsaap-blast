@@ -290,8 +290,8 @@ export interface ContactImportItem {
   /** @minLength 8 */
   phone: string;
   /** @minLength 2 */
-  consentSource: string;
-  consentAt: string;
+  consentSource?: string;
+  consentAt?: string;
 }
 
 export interface ContactImportInput {
@@ -301,6 +301,20 @@ export interface ContactImportInput {
      * @maxItems 1000
      */
   contacts: ContactImportItem[];
+  consentConfirmed?: boolean;
+}
+
+export type ContactFileImportInputConsentConfirmed = typeof ContactFileImportInputConsentConfirmed[keyof typeof ContactFileImportInputConsentConfirmed];
+
+
+export const ContactFileImportInputConsentConfirmed = {
+  true: 'true',
+} as const;
+
+export interface ContactFileImportInput {
+  campaignId: string;
+  consentConfirmed: ContactFileImportInputConsentConfirmed;
+  file: Blob;
 }
 
 export interface ImportResult {

@@ -14,4 +14,5 @@ export interface ContactImportInput {
      * @maxItems 1000
      */
   contacts: ContactImportItem[];
+  consentConfirmed?: boolean;
 }

@@ -1,8 +1,10 @@
 import { Router, type IRouter } from "express";
 import { open, unlink } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import { Readable } from "node:stream";
 import multer, { MulterError } from "multer";
 import path from "node:path";
+import ExcelJS from "exceljs";
 import {
   and,
   count,
@@ -89,6 +91,16 @@ const campaignImageUpload = multer({
       return;
     }
     callback(null, true);
+  },
+});
+
+const contactFileUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+    files: 1,
+    fields: 2,
+    parts: 3,
   },
 });
 
@@ -188,11 +200,207 @@ async function campaignDto(campaign: typeof campaignsTable.$inferSelect) {
 }
 
 function normalizePhone(value: string): string | null {
+  if (!/^\+?[\d\s().-]+$/.test(value.trim())) return null;
   let digits = value.replace(/\D/g, "");
   if (digits.startsWith("0")) digits = `62${digits.slice(1)}`;
   if (digits.length < 8 || digits.length > 15) return null;
   return digits;
 }
+
+type ContactImportItem = {
+  phone: string;
+  consentSource?: string;
+  consentAt?: Date;
+};
+
+async function insertContacts(
+  campaignId: string,
+  items: ContactImportItem[],
+  consentConfirmed: boolean,
+) {
+  const eligible = [];
+  let invalid = 0;
+  let consentMissing = 0;
+  for (const item of items) {
+    const phone = normalizePhone(item.phone);
+    if (!phone) {
+      invalid += 1;
+      continue;
+    }
+    const consentSource = item.consentSource?.trim();
+    const hasConsentDetails = Boolean(consentSource || item.consentAt);
+    const consentAt = item.consentAt ?? new Date();
+    if (hasConsentDetails && (
+      !consentSource ||
+      !item.consentAt ||
+      Number.isNaN(consentAt.getTime()) ||
+      consentAt > new Date()
+    )) {
+      consentMissing += 1;
+      continue;
+    }
+    if (!hasConsentDetails && !consentConfirmed) {
+      consentMissing += 1;
+      continue;
+    }
+    eligible.push({
+      campaignId,
+      phone,
+      status: "unsent",
+      consentSource: consentSource || "Konfirmasi admin saat impor",
+      consentAt,
+    });
+  }
+  const inserted = eligible.length
+    ? await db
+        .insert(contactsTable)
+        .values(eligible)
+        .onConflictDoNothing()
+        .returning({ id: contactsTable.id })
+    : [];
+  return {
+    added: inserted.length,
+    duplicates: eligible.length - inserted.length,
+    invalid,
+    consentMissing,
+  };
+}
+
+function getPhoneRows(worksheet: ExcelJS.Worksheet): string[] {
+  const rows = worksheet.getSheetValues().slice(1) as unknown[][];
+  const first = rows[0] ?? [];
+  const firstValue = first.find((value) => value !== null && value !== undefined);
+  const firstText = String(firstValue ?? "").trim().toLowerCase();
+  const hasHeader = ["nomor", "nomor telepon", "phone", "telephone"].includes(firstText);
+  const values = hasHeader ? rows.slice(1) : rows;
+  const phones = values
+    .map((row) => {
+      if (row.length > 2 && row.slice(2).some((value) => value !== null && value !== undefined && value !== "")) {
+        throw new Error("Template hanya boleh berisi satu kolom nomor telepon.");
+      }
+      const value = row[1];
+      if (value === null || value === undefined) return "";
+      if (typeof value === "string" || typeof value === "number") return String(value).trim();
+      if (typeof value === "object" && "text" in value && typeof value.text === "string") {
+        return value.text.trim();
+      }
+      return "";
+    })
+    .filter(Boolean);
+  if (phones.length > 1000) {
+    throw new Error("Maksimal 1.000 nomor telepon per impor.");
+  }
+  return phones;
+}
+
+router.get("/admin/contacts/template/:format", async (req, res): Promise<void> => {
+  const format = req.params.format;
+  if (format !== "csv" && format !== "xlsx") {
+    res.status(400).json({ error: "Format template harus csv atau xlsx." });
+    return;
+  }
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Kontak");
+  worksheet.columns = [{ header: "nomor", key: "nomor", width: 24, style: { numFmt: "@" } }];
+  worksheet.getRow(1).font = { bold: true };
+  const filename = `template-kontak.${format}`;
+  res.setHeader(
+    "Content-Type",
+    format === "csv"
+      ? "text/csv; charset=utf-8"
+      : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  );
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  if (format === "csv") {
+    const buffer = await workbook.csv.writeBuffer();
+    res.send(Buffer.concat([Buffer.from("\uFEFF"), Buffer.from(buffer)]));
+    return;
+  }
+  const buffer = await workbook.xlsx.writeBuffer();
+  res.send(Buffer.from(buffer));
+});
+
+router.post(
+  "/admin/contacts/import-file",
+  (req, res, next): void => {
+    contactFileUpload.single("file")(req, res, (error: unknown) => {
+      if (error instanceof MulterError) {
+        const status = error.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+        res.status(status).json({
+          error: error.code === "LIMIT_FILE_SIZE"
+            ? "Ukuran file maksimal 5 MB."
+            : "File impor tidak valid.",
+        });
+        return;
+      }
+      if (error) {
+        res.status(400).json({ error: "File impor tidak dapat dibaca." });
+        return;
+      }
+      next();
+    });
+  },
+  async (req, res): Promise<void> => {
+    if (req.body["consentConfirmed"] !== "true") {
+      res.status(400).json({ error: "Konfirmasi persetujuan kontak wajib dicentang." });
+      return;
+    }
+    const campaignId = req.body["campaignId"];
+    if (typeof campaignId !== "string" || !campaignId.trim()) {
+      res.status(400).json({ error: "Pilih kampanye tujuan." });
+      return;
+    }
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: "Pilih file CSV atau Excel." });
+      return;
+    }
+    const extension = path.extname(file.originalname).toLowerCase();
+    if (extension !== ".csv" && extension !== ".xlsx") {
+      res.status(400).json({ error: "Format file harus CSV atau XLSX." });
+      return;
+    }
+    const [campaign] = await db
+      .select({ id: campaignsTable.id })
+      .from(campaignsTable)
+      .where(eq(campaignsTable.id, campaignId))
+      .limit(1);
+    if (!campaign) {
+      res.status(404).json({ error: "Campaign tidak ditemukan." });
+      return;
+    }
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = extension === ".csv"
+        ? await workbook.csv.read(Readable.from([file.buffer]), {
+            map: (value) => value === "" ? null : value,
+          })
+        : (await workbook.xlsx.read(Readable.from([file.buffer])), workbook.worksheets[0]);
+      if (!worksheet) {
+        res.status(400).json({ error: "File tidak memiliki sheet kontak." });
+        return;
+      }
+      const phones = getPhoneRows(worksheet);
+      if (phones.length === 0) {
+        res.status(400).json({ error: "File tidak berisi nomor telepon." });
+        return;
+      }
+      res.status(201).json(
+        ImportContactsResponse.parse(
+          await insertContacts(
+            campaign.id,
+            phones.map((phone) => ({ phone })),
+            true,
+          ),
+        ),
+      );
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "File impor tidak valid.",
+      });
+    }
+  },
+);
 
 router.get("/admin/campaigns", async (_req, res): Promise<void> => {
   const campaigns = await db
@@ -383,43 +591,18 @@ router.post("/admin/contacts", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Campaign tidak ditemukan." });
     return;
   }
-  const eligible = [];
-  let invalid = 0;
-  let consentMissing = 0;
-  for (const item of parsed.data.contacts) {
-    const phone = normalizePhone(item.phone);
-    const consentSource = item.consentSource.trim();
-    const consentAt = new Date(item.consentAt);
-    if (!phone) {
-      invalid += 1;
-      continue;
-    }
-    if (!consentSource || Number.isNaN(consentAt.getTime()) || consentAt > new Date()) {
-      consentMissing += 1;
-      continue;
-    }
-    eligible.push({
-      campaignId: campaign.id,
-      phone,
-      status: "unsent",
-      consentSource,
-      consentAt,
-    });
-  }
-  const inserted = eligible.length
-    ? await db
-        .insert(contactsTable)
-        .values(eligible)
-        .onConflictDoNothing()
-        .returning({ id: contactsTable.id })
-    : [];
   res.status(201).json(
-    ImportContactsResponse.parse({
-      added: inserted.length,
-      duplicates: eligible.length - inserted.length,
-      invalid,
-      consentMissing,
-    }),
+    ImportContactsResponse.parse(
+      await insertContacts(
+        campaign.id,
+        parsed.data.contacts.map((item) => ({
+          phone: item.phone,
+          consentSource: item.consentSource,
+          consentAt: item.consentAt ? new Date(item.consentAt) : undefined,
+        })),
+        parsed.data.consentConfirmed ?? false,
+      ),
+    ),
   );
 });
 
