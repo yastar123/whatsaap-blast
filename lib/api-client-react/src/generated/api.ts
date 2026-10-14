@@ -22,6 +22,7 @@ import type {
 import type {
   ActionResult,
   ActiveCampaignResponse,
+  AdminBlastProgressList,
   AdminWaSession,
   AppSettings,
   AuthResponse,
@@ -2415,6 +2416,83 @@ export function useGetCurrentBlast<TData = Awaited<ReturnType<typeof getCurrentB
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetCurrentBlastQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListAdminBlastsUrl = () => {
+
+
+
+
+  return `/api/admin/blasts`
+}
+
+/**
+ * @summary List each customer's latest blast progress
+ */
+export const listAdminBlasts = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminBlastProgressList> => {
+
+  return customFetch<AdminBlastProgressList>(getListAdminBlastsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminBlastsQueryKey = () => {
+    return [
+    `/api/admin/blasts`
+    ] as const;
+    }
+
+
+export const getListAdminBlastsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminBlasts>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminBlasts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminBlastsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminBlasts>>> = ({ signal }) => listAdminBlasts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminBlasts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminBlastsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminBlasts>>>
+export type ListAdminBlastsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List each customer's latest blast progress
+ */
+
+export function useListAdminBlasts<TData = Awaited<ReturnType<typeof listAdminBlasts>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminBlasts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminBlastsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

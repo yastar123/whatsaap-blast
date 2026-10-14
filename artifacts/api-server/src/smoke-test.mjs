@@ -237,6 +237,7 @@ async function apiTests() {
   const customerAdminReads = [
     ["customer blocked from admin contacts", "/admin/contacts"],
     ["customer blocked from admin users", "/admin/users"],
+    ["customer blocked from admin blast monitoring", "/admin/blasts"],
     ["customer blocked from admin sessions", "/admin/wa-sessions"],
     ["customer blocked from admin settings", "/admin/settings"],
   ];
@@ -259,6 +260,11 @@ async function apiTests() {
     const response = await request(path, { token: admin.accessToken });
     expectStatus(name, response, 403);
   }
+  const adminBlasts = await request("/admin/blasts", {
+    token: admin.accessToken,
+  });
+  expectStatus("admin can monitor customer blast progress", adminBlasts, 200);
+  check("admin blast monitoring returns a list", Array.isArray(adminBlasts.data));
 
   const adminStart = await request("/blast/start", {
     method: "POST",

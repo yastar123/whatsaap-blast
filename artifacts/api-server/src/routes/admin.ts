@@ -32,6 +32,7 @@ import {
   ImportContactsBody,
   ImportContactsResponse,
   ListAdminWaSessionsResponse,
+  ListAdminBlastsResponse,
   ListCampaignsResponse,
   ListContactsQueryParams,
   ListContactsResponse,
@@ -57,6 +58,7 @@ import {
 import { getAppSettings, saveAppSettings } from "../lib/app-settings";
 import { requireAdmin, requireAuth } from "../lib/auth";
 import { disconnectWaSession } from "../lib/baileys-manager";
+import { getBlastJobProgress } from "../lib/blast-worker";
 import { campaignImageDirectory } from "../lib/campaign-image-storage";
 
 const router: IRouter = Router();
@@ -777,6 +779,41 @@ router.get("/admin/users", async (req, res): Promise<void> => {
     }),
   );
   res.json(ListUsersResponse.parse(summaries));
+});
+
+router.get("/admin/blasts", async (_req, res): Promise<void> => {
+  const latestJobs = await db
+    .selectDistinctOn([blastJobsTable.userId], {
+      ownerId: usersTable.id,
+      ownerName: usersTable.name,
+      ownerEmail: usersTable.email,
+      campaignTitle: campaignsTable.title,
+      jobId: blastJobsTable.id,
+    })
+    .from(blastJobsTable)
+    .innerJoin(usersTable, eq(blastJobsTable.userId, usersTable.id))
+    .leftJoin(campaignsTable, eq(blastJobsTable.campaignId, campaignsTable.id))
+    .where(eq(usersTable.role, "customer"))
+    .orderBy(blastJobsTable.userId, desc(blastJobsTable.startedAt));
+
+  const progressItems = await Promise.all(
+    latestJobs.map(async (item) => {
+      const job = await getBlastJobProgress(item.jobId);
+      if (!job) return null;
+      return {
+        ownerId: item.ownerId,
+        ownerName: item.ownerName,
+        ownerEmail: item.ownerEmail,
+        campaignTitle: item.campaignTitle ?? "Kampanye dihapus",
+        job,
+      };
+    }),
+  );
+  res.json(
+    ListAdminBlastsResponse.parse(
+      progressItems.filter((item) => item !== null),
+    ),
+  );
 });
 
 router.patch("/admin/users/:userId/status", async (req, res): Promise<void> => {

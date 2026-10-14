@@ -15,11 +15,11 @@ import {
   getGetCurrentBlastQueryKey, getListCampaignsQueryKey, getListContactsQueryKey,
   getListResultsQueryKey, getGetResultsSummaryQueryKey, getListCampaignResultSummariesQueryKey,
   getListWaSessionsQueryKey, getListUsersQueryKey, getListWithdrawalsQueryKey,
-  getListAdminWaSessionsQueryKey,
+  getListAdminWaSessionsQueryKey, getListAdminBlastsQueryKey,
   useGetCurrentUser, useGetDashboardOverview, useGetSettings, useGetWallet, useGetReferrals,
   useGetActiveCampaign, useGetCurrentBlast, useListCampaigns, useListContacts, useListResults,
   useGetResultsSummary, useListCampaignResultSummaries, useListWaSessions, useListUsers,
-  useListWithdrawals, useListAdminWaSessions, useDisconnectAdminWaSession,
+  useListWithdrawals, useListAdminWaSessions, useListAdminBlasts, useDisconnectAdminWaSession,
   useLogin, useRegister, useLogout, useCreateWaSession, useConnectWaSession,
   useDeleteWaSession, useCreateCampaign, useUpdateCampaign, useDeleteCampaign, useActivateCampaign,
   useImportContacts, useImportContactsFile, useDeleteContact, useDeleteCampaignContacts, useStartBlast, useCancelBlast, useRequestWithdrawal,
@@ -40,7 +40,7 @@ const date = (value?: string | null) => value ? new Intl.DateTimeFormat('id-ID',
 const navGroups = [
   { title: 'Ruang kerja', links: [{ href: '/', label: 'Ringkasan', icon: LayoutDashboard }, { href: '/whatsapp', label: 'WhatsApp', icon: Smartphone }, { href: '/blast', label: 'Kirim kampanye', icon: Send }, { href: '/results', label: 'Hasil pengiriman', icon: BarChart3 }] },
   { title: 'Keuangan', links: [{ href: '/wallet', label: 'Dompet', icon: WalletIcon }, { href: '/referrals', label: 'Referral', icon: Users }, { href: '/withdrawals', label: 'Penarikan', icon: CreditCard }] },
-  { title: 'Administrasi', links: [{ href: '/campaigns', label: 'Kampanye', icon: Blocks, admin: true }, { href: '/contacts', label: 'Kontak & consent', icon: ClipboardList, admin: true }, { href: '/customers', label: 'Akun pengirim', icon: UserRound, admin: true }, { href: '/admin/sessions', label: 'Sesi semua pengirim', icon: Smartphone, admin: true }, { href: '/settings', label: 'Pengaturan', icon: Settings2, admin: true }] },
+  { title: 'Administrasi', links: [{ href: '/campaigns', label: 'Kampanye', icon: Blocks, admin: true }, { href: '/contacts', label: 'Kontak & consent', icon: ClipboardList, admin: true }, { href: '/customers', label: 'Akun pengirim', icon: UserRound, admin: true }, { href: '/admin/blasts', label: 'Pemantauan blast', icon: Activity, admin: true }, { href: '/admin/sessions', label: 'Sesi semua pengirim', icon: Smartphone, admin: true }, { href: '/settings', label: 'Pengaturan', icon: Settings2, admin: true }] },
 ];
 const titles: Record<string, [string, string]> = {
   '/': ['Ringkasan operasi', 'Pantau kampanye, sesi, dan arus pengiriman.'],
@@ -54,6 +54,7 @@ const titles: Record<string, [string, string]> = {
   '/contacts': ['Kontak & consent', 'Impor hanya kontak dengan bukti persetujuan.'],
   '/customers': ['Akun pengirim', 'Kelola akses akun customer.'],
   '/admin/sessions': ['Sesi semua pengirim', 'Pantau dan putuskan sesi WhatsApp milik customer.'],
+  '/admin/blasts': ['Pemantauan blast', 'Pantau status pekerjaan pengiriman terbaru setiap customer.'],
   '/settings': ['Pengaturan bisnis', 'Atur tarif dan batas operasional.'],
 };
 
@@ -73,7 +74,7 @@ function Shell() {
   if (isLoading) return <div className="loading-screen"><div className="skeleton brand-skeleton" /><div className="skeleton line-skeleton" /><div className="skeleton content-skeleton" /></div>;
   if (isError || !user) return <AuthPage mode="login" />;
   const currentTitle = titles[path] || ['Halaman tidak ditemukan', ''];
-  const adminOnlyPaths = ['/campaigns', '/contacts', '/customers', '/admin/sessions', '/settings'];
+  const adminOnlyPaths = ['/campaigns', '/contacts', '/customers', '/admin/blasts', '/admin/sessions', '/settings'];
   const customerOnlyPaths = ['/whatsapp', '/blast', '/wallet', '/referrals'];
   const shownGroups = navGroups.map(group => ({
     ...group,
@@ -106,6 +107,7 @@ function Shell() {
           <Route path="/contacts">{user.role === 'admin' ? <ContactsPage /> : <Forbidden />}</Route>
           <Route path="/customers">{user.role === 'admin' ? <CustomersPage /> : <Forbidden />}</Route>
           <Route path="/admin/sessions">{user.role === 'admin' ? <AdminWaSessionsPage /> : <Forbidden />}</Route>
+          <Route path="/admin/blasts">{user.role === 'admin' ? <AdminBlastsPage /> : <Forbidden />}</Route>
           <Route path="/settings">{user.role === 'admin' ? <SettingsPage /> : <Forbidden />}</Route>
           <Route><NotFound /></Route>
         </Switch></ErrorBoundary>
@@ -353,7 +355,7 @@ function BlastPage({ role }: { role: string }) {
   const progress = job?.total ? Math.min(100, Math.round(((job.sent + job.failed) / job.total) * 100)) : 0;
   if (active.isLoading || sessions.isLoading || current.isLoading) return <LoadingBlock />;
   return <div className="blast-layout"><section className="blast-main"><div className="panel blast-campaign-card"><div className="campaign-card-top"><div className="campaign-mark"><MessageCircle size={20} /></div><span className="active-campaign-tag"><i /> KAMPANYE TERPILIH ADMIN</span></div>{campaign ? <><h2>{campaign.title}</h2><p>{campaign.messageText}</p><div className="blast-campaign-meta"><span><Users size={15} /> {campaign.contactTotal.toLocaleString('id-ID')} kontak consent</span><span><ShieldCheck size={15} /> Consent aktif diperiksa sebelum kirim</span></div></> : <Empty title="Belum ada kampanye aktif" text="Administrator belum memilih kampanye untuk dikirim." />}</div>
-     {job && <section className="panel progress-panel"><div className="progress-heading"><div><div className="eyebrow">STATUS PEKERJAAN</div><h3>Pengiriman sedang {job.status === 'running' ? 'berjalan' : 'berakhir'}</h3></div><Status value={job.status} /></div><div className="progress-number">{progress}<span>%</span><small>{job.sent + job.failed} dari {job.total} diproses</small></div><div className="progress-track"><i style={{ width: `${progress}%` }} /></div><div className="progress-breakdown"><span><b className="sent-count">{job.sent}</b> Terkirim</span><span><b className="fail-count">{job.failed}</b> Gagal</span><span><b>{job.pending}</b> Menunggu</span><span>Saldo berjalan {money(job.runningBalance)}</span><span>Mulai {date(job.startedAt)}</span></div>{job.sessions.length > 0 && <div className="session-list">{job.sessions.map(session => <div className="session-row" key={session.waSessionId}><span className="session-icon"><Smartphone size={15} /></span><span className="session-copy"><b>{session.phone || session.waSessionId}</b><span>{session.sent} terkirim · {session.failed} gagal</span></span><Status value={session.status} /></div>)}</div>}</section>}
+     {job && <section className="panel progress-panel"><div className="progress-heading"><div><div className="eyebrow">STATUS PEKERJAAN</div><h3>{job.status === 'running' ? 'Pengiriman sedang berjalan' : job.status === 'completed' ? 'Pengiriman selesai' : job.status === 'cancelled' ? 'Pengiriman dibatalkan' : 'Pengiriman gagal'}</h3></div><Status value={job.status} /></div><div className="progress-number">{progress}<span>%</span><small>{job.sent + job.failed} dari {job.total} diproses</small></div><div className="progress-track"><i style={{ width: `${progress}%` }} /></div><div className="progress-breakdown"><span><b className="sent-count">{job.sent}</b> Terkirim</span><span><b className="fail-count">{job.failed}</b> Gagal</span><span><b>{job.pending}</b> Menunggu</span><span>Saldo berjalan {money(job.runningBalance)}</span><span>Mulai {date(job.startedAt)}</span></div>{job.sessions.length > 0 && <div className="session-list">{job.sessions.map(session => <div className="session-row" key={session.waSessionId}><span className="session-icon"><Smartphone size={15} /></span><span className="session-copy"><b>{session.phone || session.waSessionId}</b><span>{session.sent} terkirim · {session.failed} gagal</span></span><Status value={session.status} /></div>)}</div>}</section>}
     <div className="panel blast-controls">
        <SectionTitle title="Konfigurasi pengiriman" detail="Setiap sesi online akan menjadi pekerja mandiri." />
        <label className="form-label">Sesi yang akan mengirim</label>
@@ -750,6 +752,47 @@ function ContactsPage() {
 function CustomersPage() {
   const [search, setSearch] = useState(''); const params = useMemo(() => ({ ...(search ? { search } : {}) }), [search]); const q = useListUsers(params, { query: { queryKey: getListUsersQueryKey(params) } }); const update = useUpdateUserStatus(); const qc = useQueryClient();
   return <section className="panel customers-panel"><SectionTitle title="Akun customer" detail={`${q.data?.length || 0} akun terdaftar`} /><div className="filter-bar"><div className="search-field"><Search size={16} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari nama atau email..." /></div><span className="secure-badge"><Users size={14} /> Pengelolaan akses</span></div><div className="table-scroll"><table><thead><tr><th>Customer</th><th>Referral</th><th>Bergabung</th><th>Pesan terkirim</th><th>Status akun</th><th>Aksi</th></tr></thead><tbody>{q.isLoading ? <tr><td colSpan={6}>Memuat akun customer...</td></tr> : q.data?.length ? q.data.map(u => <tr key={u.id}><td><div className="customer-cell"><span className="avatar avatar-small">{u.name.slice(0, 1)}</span><span><b>{u.name}</b><small>{u.email}</small></span></div></td><td className="mono">{u.referralCode}</td><td>{date(u.createdAt)}</td><td>{u.sentCount.toLocaleString('id-ID')}</td><td><Status value={u.status} /></td><td><button className={`button button-small ${u.status === 'active' ? 'button-secondary' : 'button-primary'}`} onClick={() => update.mutate({ userId: u.id, data: { status: u.status === 'active' ? 'blocked' : 'active' } }, { onSuccess: () => qc.invalidateQueries({ queryKey: getListUsersQueryKey(params) }) })}>{u.status === 'active' ? 'Blokir' : 'Aktifkan'}</button></td></tr>) : <tr><td colSpan={6}><Empty title="Customer tidak ditemukan" text="Coba kata pencarian lain." /></td></tr>}</tbody></table></div></section>;
+}
+
+function AdminBlastsPage() {
+  const q = useListAdminBlasts({
+    query: { queryKey: getListAdminBlastsQueryKey(), refetchInterval: 5000 },
+  });
+  if (q.isLoading) return <LoadingBlock />;
+  if (q.isError) return <ErrorBlock retry={() => q.refetch()} />;
+  const jobs = [...(q.data ?? [])].sort(
+    (a, b) =>
+      Number(b.job.status === 'running') - Number(a.job.status === 'running') ||
+      new Date(b.job.startedAt).getTime() - new Date(a.job.startedAt).getTime(),
+  );
+  const runningCount = jobs.filter(item => item.job.status === 'running').length;
+  return <section className="panel customers-panel">
+    <SectionTitle
+      title="Pemantauan blast customer"
+      detail={`${runningCount} sedang berjalan · ${jobs.length} pekerjaan terakhir`}
+      action={<button className="button button-secondary button-small" onClick={() => q.refetch()}><RotateCw size={13} /> Muat ulang</button>}
+    />
+    <div className="table-scroll"><table>
+      <thead><tr><th>Customer</th><th>Kampanye</th><th>Status pekerjaan</th><th>Progres</th><th>Mulai</th></tr></thead>
+      <tbody>{jobs.length ? jobs.map(({ ownerId, ownerName, ownerEmail, campaignTitle, job }) => {
+        const progress = job.total ? Math.min(100, Math.round(((job.sent + job.failed) / job.total) * 100)) : 0;
+        const description = job.status === 'running'
+          ? 'Pengiriman sedang berjalan'
+          : job.status === 'completed'
+            ? 'Pengiriman selesai'
+            : job.status === 'cancelled'
+              ? 'Pengiriman dibatalkan'
+              : 'Pengiriman gagal';
+        return <tr key={ownerId}>
+          <td><div className="customer-cell"><span className="avatar avatar-small">{ownerName.slice(0, 1)}</span><span><b>{ownerName}</b><small>{ownerEmail}</small></span></div></td>
+          <td>{campaignTitle}</td>
+          <td><span>{description}</span><br /><Status value={job.status} /></td>
+          <td><b>{job.sent}</b> terkirim · <b>{job.failed}</b> gagal · <b>{job.pending}</b> menunggu<div className="progress-track"><i style={{ width: `${progress}%` }} /></div><small>{progress}% · {job.sent + job.failed} dari {job.total} diproses</small></td>
+          <td>{date(job.startedAt)}</td>
+        </tr>;
+      }) : <tr><td colSpan={5}><Empty title="Belum ada pekerjaan blast" text="Pekerjaan terbaru customer akan tampil di sini." /></td></tr>}</tbody>
+    </table></div>
+  </section>;
 }
 
 function AdminWaSessionsPage() {

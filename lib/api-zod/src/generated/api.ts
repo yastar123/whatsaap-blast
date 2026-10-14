@@ -606,6 +606,37 @@ export const GetCurrentBlastResponse = zod.object({
 
 
 /**
+ * @summary List each customer's latest blast progress
+ */
+export const ListAdminBlastsResponseItem = zod.object({
+  "ownerId": zod.string(),
+  "ownerName": zod.string(),
+  "ownerEmail": zod.string().email(),
+  "campaignTitle": zod.string(),
+  "job": zod.object({
+  "id": zod.string(),
+  "campaignId": zod.string(),
+  "status": zod.enum(['running', 'cancelled', 'completed', 'failed']),
+  "total": zod.number().int(),
+  "sent": zod.number().int(),
+  "failed": zod.number().int(),
+  "pending": zod.number().int(),
+  "runningBalance": zod.number().int(),
+  "sessions": zod.array(zod.object({
+  "waSessionId": zod.string(),
+  "phone": zod.string().nullable(),
+  "status": zod.string(),
+  "sent": zod.number().int(),
+  "failed": zod.number().int()
+})),
+  "startedAt": zod.coerce.date(),
+  "finishedAt": zod.coerce.date().nullable()
+})
+})
+export const ListAdminBlastsResponse = zod.array(ListAdminBlastsResponseItem)
+
+
+/**
  * @summary List scoped delivery results
  */
 export const listResultsQueryStatusDefault = `all`;

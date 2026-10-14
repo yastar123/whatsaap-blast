@@ -389,6 +389,16 @@ export interface CurrentBlastResponse {
   job: BlastJob | null;
 }
 
+export interface AdminBlastProgress {
+  ownerId: string;
+  ownerName: string;
+  ownerEmail: string;
+  campaignTitle: string;
+  job: BlastJob;
+}
+
+export type AdminBlastProgressList = AdminBlastProgress[];
+
 export type ResultStatus = typeof ResultStatus[keyof typeof ResultStatus];
 
 

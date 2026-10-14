@@ -526,6 +526,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CurrentBlastResponse"
+  /admin/blasts:
+    get:
+      operationId: listAdminBlasts
+      tags: [admin]
+      summary: List each customer's latest blast progress
+      responses:
+        "200":
+          description: Latest blast for each customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminBlastProgressList"
   /results:
     get:
       operationId: listResults
@@ -1060,6 +1072,18 @@ components:
             - $ref: "#/components/schemas/BlastJob"
             - type: "null"
       required: [job]
+    AdminBlastProgress:
+      type: object
+      properties:
+        ownerId: { type: string }
+        ownerName: { type: string }
+        ownerEmail: { type: string, format: email }
+        campaignTitle: { type: string }
+        job: { $ref: "#/components/schemas/BlastJob" }
+      required: [ownerId, ownerName, ownerEmail, campaignTitle, job]
+    AdminBlastProgressList:
+      type: array
+      items: { $ref: "#/components/schemas/AdminBlastProgress" }
     Result:
       type: object
       properties:
