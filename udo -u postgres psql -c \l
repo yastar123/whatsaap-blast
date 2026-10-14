@@ -1,0 +1,24 @@
+[0;1;32m●[0m postgresql.service - PostgreSQL database server
+   Loaded: loaded (/usr/lib/systemd/system/postgresql.service; enabled; vendor preset: disabled)
+   Active: [0;1;32mactive (running)[0m since Wed 2026-10-14 11:26:55 WIB; 35min ago
+ Main PID: 66397 (postmaster)
+    Tasks: 8 (limit: 3964)
+   Memory: 16.2M
+   CGroup: /system.slice/postgresql.service
+           ├─66397 /usr/bin/postmaster -D /var/lib/pgsql/data
+           ├─66398 postgres: logger process   
+           ├─66400 postgres: checkpointer process   
+           ├─66401 postgres: writer process   
+           ├─66402 postgres: wal writer process   
+           ├─66403 postgres: autovacuum launcher process   
+           ├─66404 postgres: stats collector process   
+           └─66405 postgres: bgworker: logical replication launcher   
+
+Oct 14 11:26:55 srv-69690809.servername.com systemd[1]: Starting PostgreSQL database server...
+Oct 14 11:26:55 srv-69690809.servername.com postmaster[66397]: 2026-10-14 11:26:55.597 WIB [66397] LOG:  listening on IPv6 address "::1", port 5432
+Oct 14 11:26:55 srv-69690809.servername.com postmaster[66397]: 2026-10-14 11:26:55.597 WIB [66397] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+Oct 14 11:26:55 srv-69690809.servername.com postmaster[66397]: 2026-10-14 11:26:55.603 WIB [66397] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+Oct 14 11:26:55 srv-69690809.servername.com postmaster[66397]: 2026-10-14 11:26:55.613 WIB [66397] LOG:  listening on Unix socket "/tmp/.s.PGSQL.5432"
+Oct 14 11:26:55 srv-69690809.servername.com postmaster[66397]: 2026-10-14 11:26:55.627 WIB [66397] LOG:  redirecting log output to logging collector process
+Oct 14 11:26:55 srv-69690809.servername.com postmaster[66397]: 2026-10-14 11:26:55.627 WIB [66397] HINT:  Future log output will appear in directory "log".
+Oct 14 11:26:55 srv-69690809.servername.com systemd[1]: Started PostgreSQL database server.
