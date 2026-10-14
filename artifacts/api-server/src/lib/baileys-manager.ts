@@ -6,6 +6,8 @@ import pino from "pino";
 import makeWASocket, {
   DisconnectReason,
   generateMessageIDV2,
+  prepareWAMessageMedia,
+  proto,
   useMultiFileAuthState,
 } from "@whiskeysockets/baileys";
 import QRCode from "qrcode";
@@ -510,18 +512,45 @@ export async function sendWhatsAppMessage(
   }
   const number = normalizePhone(recipientPhone);
   if (number.length < 8) throw new Error("Nomor penerima tidak valid.");
-  const ctaFallback = [content.ctaText?.trim(), content.ctaUrl?.trim()]
-    .filter((part): part is string => Boolean(part))
-    .join("\n");
-  const text =
-    content.text +
-    (ctaFallback ? `\n\n${ctaFallback}` : "") +
-    "\n\nBalas BERHENTI untuk berhenti menerima pesan.";
+  const ctaText = content.ctaText?.trim();
+  const ctaUrl = content.ctaUrl?.trim();
+  const ctaFallback = ctaUrl ? "" : ctaText;
+  const text = [
+    content.text,
+    ctaFallback,
+    "Balas BERHENTI untuk berhenti menerima pesan.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   const jid = `${number}@s.whatsapp.net`;
   const messageId = generateMessageIDV2(socket.user.id);
-  const messageContent = content.imageUrl
-    ? { image: { url: content.imageUrl }, caption: text }
-    : { text };
+  let buttonMessage: proto.IMessage | undefined;
+  if (ctaUrl) {
+    const media = content.imageUrl
+      ? await prepareWAMessageMedia(
+          { image: { url: content.imageUrl } },
+          { upload: socket.waUploadToServer },
+        )
+      : undefined;
+    buttonMessage = proto.Message.fromObject({
+      templateMessage: {
+        hydratedTemplate: {
+          hydratedContentText: content.text,
+          hydratedFooterText: "Balas BERHENTI untuk berhenti menerima pesan.",
+          hydratedButtons: [
+            {
+              index: 0,
+              urlButton: {
+                displayText: ctaText || "Buka tautan",
+                url: ctaUrl,
+              },
+            },
+          ],
+          ...(media?.imageMessage ? { imageMessage: media.imageMessage } : {}),
+        },
+      },
+    });
+  }
   let lastError: unknown;
 
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -540,9 +569,14 @@ export async function sendWhatsAppMessage(
       sendSocket = reconnectedSocket;
     }
     try {
-      const result = await sendSocket.sendMessage(jid, messageContent, {
-        messageId,
-      });
+      if (ctaUrl) {
+        if (!buttonMessage) throw new Error("Tombol CTA tidak dapat disiapkan.");
+        return await sendSocket.relayMessage(jid, buttonMessage, { messageId });
+      }
+      const messageContent = content.imageUrl
+        ? { image: { url: content.imageUrl }, caption: text }
+        : { text };
+      const result = await sendSocket.sendMessage(jid, messageContent, { messageId });
       return result?.key.id ?? null;
     } catch (error) {
       lastError = error;
