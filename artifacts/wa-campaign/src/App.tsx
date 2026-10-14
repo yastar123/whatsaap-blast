@@ -326,8 +326,11 @@ function WhatsAppPage() {
   const qc = useQueryClient(); const sessions = useListWaSessions(); const create = useCreateWaSession(); const connect = useConnectWaSession(); const remove = useDeleteWaSession();
   const [label, setLabel] = useState(''); const [selected, setSelected] = useState(''); const [mode, setMode] = useState<'qr' | 'pairing_code'>('qr'); const [phone, setPhone] = useState(''); const [authData, setAuthData] = useState<{qrDataUrl?: string | null; pairingCode?: string | null} | null>(null); const [error, setError] = useState(''); const [realtimeError, setRealtimeError] = useState('');
   const refresh = () => {
-    void qc.invalidateQueries({ queryKey: getListWaSessionsQueryKey() }).catch(error => {
-      if (error instanceof Error && error.name === 'AbortError') return;
+    void qc.invalidateQueries(
+      { queryKey: getListWaSessionsQueryKey() },
+      { cancelRefetch: false },
+    ).catch(error => {
+      if (typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError') return;
       console.error('Gagal memperbarui daftar sesi WhatsApp setelah perubahan status.', error);
     });
   };
