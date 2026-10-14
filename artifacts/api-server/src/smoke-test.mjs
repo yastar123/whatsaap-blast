@@ -112,7 +112,7 @@ async function apiTests() {
   });
   expectStatus("configured admin login", adminLogin, 200);
   if (!adminLogin.data?.accessToken || !adminLogin.data?.user?.id) {
-    throw new Error("Demo admin login did not return an authenticated user.");
+    throw new Error("Admin login did not return an authenticated user.");
   }
   const admin = adminLogin.data;
   issuedTokens.push(admin.accessToken);
