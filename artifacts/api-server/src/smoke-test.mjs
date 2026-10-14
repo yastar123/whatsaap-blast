@@ -632,17 +632,53 @@ async function apiTests() {
     token: customer.accessToken,
   });
   expectStatus("result pagination bounds enforced", invalidResultPage, 400);
-  const csv = await fetch(`${apiBase}/results/export?format=csv`, {
+  if (created.campaignId) {
+    await pool.query(
+      `INSERT INTO contacts (campaign_id, phone, status, locked_by_user_id)
+       VALUES ($1, $2, 'sent', $5), ($1, $3, 'pending', $5), ($1, $4, 'failed', $5)`,
+      [
+        created.campaignId,
+        `628${suffix.slice(0, 10)}1`,
+        `628${suffix.slice(0, 10)}2`,
+        `628${suffix.slice(0, 10)}3`,
+        created.userId,
+      ],
+    );
+  }
+  const exportQuery = new URLSearchParams({
+    format: "csv",
+    ...(created.campaignId ? { campaignId: created.campaignId } : {}),
+  });
+  const csv = await fetch(`${apiBase}/results/export?${exportQuery}`, {
     headers: { authorization: `Bearer ${customer.accessToken}` },
   });
   check("CSV export returns downloadable data", csv.status === 200 && (csv.headers.get("content-type") ?? "").includes("text/csv"));
   const csvText = await csv.text();
   check("CSV export includes the requested headers", csvText.toLowerCase().includes("phone") || csvText.toLowerCase().includes("nomor"));
-  const xlsx = await fetch(`${apiBase}/results/export?format=xlsx`, {
+  check(
+    "CSV export formats delivery statuses with labels and indicators",
+    csvText.includes("Success🟢") &&
+      csvText.includes("Pending🟡") &&
+      csvText.includes("Failed🔴"),
+  );
+  exportQuery.set("format", "xlsx");
+  const xlsx = await fetch(`${apiBase}/results/export?${exportQuery}`, {
     headers: { authorization: `Bearer ${customer.accessToken}` },
   });
   const xlsxBytes = await xlsx.arrayBuffer();
   check("Excel export returns a non-empty spreadsheet", xlsx.status === 200 && xlsxBytes.byteLength > 100);
+  const exportedWorkbook = new ExcelJS.Workbook();
+  await exportedWorkbook.xlsx.load(Buffer.from(xlsxBytes));
+  const exportedStatuses = exportedWorkbook.worksheets[0]
+    ?.getColumn("Status")
+    .values
+    .slice(2);
+  check(
+    "Excel export formats delivery statuses with labels and indicators",
+    exportedStatuses?.includes("Success🟢") &&
+      exportedStatuses.includes("Pending🟡") &&
+      exportedStatuses.includes("Failed🔴"),
+  );
 
   const blocked = await request(`/admin/users/${created.userId}/status`, {
     method: "PATCH",
@@ -684,6 +720,12 @@ async function apiTests() {
       client.release();
     }
   }
+  if (created.campaignId) {
+    await pool.query(
+      "UPDATE campaigns SET sent_count = 1 WHERE id = $1",
+      [created.campaignId],
+    );
+  }
   const deletedCampaign = created.campaignId
     ? await request(`/admin/campaigns/${created.campaignId}`, {
         method: "DELETE",
@@ -691,7 +733,7 @@ async function apiTests() {
       })
     : null;
   if (deletedCampaign) {
-    expectStatus("admin deletes the unused QA campaign", deletedCampaign, 200);
+    expectStatus("admin deletes a campaign with send history", deletedCampaign, 200);
     created.campaignId = null;
   }
 

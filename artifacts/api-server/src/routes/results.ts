@@ -188,7 +188,11 @@ router.get("/results/export", async (req, res): Promise<void> => {
   const exportRows = rows.map((row) => ({
     "Nomor tujuan": row.phone,
     Campaign: row.campaignTitle,
-    Status: row.status,
+    Status: {
+      sent: "Success🟢",
+      pending: "Pending🟡",
+      failed: "Failed🔴",
+    }[row.status] ?? row.status,
     "Alasan gagal": row.errorReason ?? "",
     "WA pengirim": row.senderPhone ?? "",
     "Waktu kirim": row.sentAt?.toISOString() ?? "",

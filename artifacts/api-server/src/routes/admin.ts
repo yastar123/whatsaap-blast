@@ -472,10 +472,6 @@ router.delete("/admin/campaigns/:campaignId", async (req, res): Promise<void> =>
     res.status(404).json({ error: "Campaign tidak ditemukan." });
     return;
   }
-  if (campaign.sentCount > 0 || campaign.isActive) {
-    res.status(409).json({ error: "Campaign aktif atau yang sudah mengirim tidak dapat dihapus." });
-    return;
-  }
   const [running] = await db
     .select({ id: blastJobsTable.id })
     .from(blastJobsTable)
