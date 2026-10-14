@@ -616,6 +616,11 @@ async function apiTests() {
     token: admin.accessToken,
   });
   expectStatus("missing admin WA session returns 404", missingAdminSession, 404);
+  const missingContact = await request(`/admin/contacts/${randomUUID()}`, {
+    method: "DELETE",
+    token: admin.accessToken,
+  });
+  expectStatus("deleting an already-removed contact is idempotent", missingContact, 200);
 
   const referralList = await request("/referrals", { token: admin.accessToken });
   expectStatus("referral owner can see the new downline", referralList, 200);

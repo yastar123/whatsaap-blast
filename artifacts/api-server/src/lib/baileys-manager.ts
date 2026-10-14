@@ -512,7 +512,7 @@ export async function sendWhatsAppMessage(
   if (number.length < 8) throw new Error("Nomor penerima tidak valid.");
   const ctaFallback = [content.ctaText?.trim(), content.ctaUrl?.trim()]
     .filter((part): part is string => Boolean(part))
-    .join(": ");
+    .join("\n");
   const text =
     content.text +
     (ctaFallback ? `\n\n${ctaFallback}` : "") +

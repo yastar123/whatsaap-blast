@@ -24,6 +24,7 @@
     "express-rate-limit": "^8.7.1",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
+    "link-preview-js": "^3.2.0",
     "multer": "^2.4.0",
     "pino": "^9.14.0",
     "pino-http": "^10.5.0",

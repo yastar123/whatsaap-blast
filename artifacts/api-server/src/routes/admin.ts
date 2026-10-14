@@ -613,7 +613,12 @@ router.delete("/admin/contacts/:contactId", async (req, res): Promise<void> => {
     .where(eq(contactsTable.id, params.data.contactId))
     .returning({ id: contactsTable.id });
   if (!contact) {
-    res.status(404).json({ error: "Kontak tidak ditemukan." });
+    res.json(
+      DeleteContactResponse.parse({
+        success: true,
+        message: "Kontak sudah tidak tersedia.",
+      }),
+    );
     return;
   }
   res.json(DeleteContactResponse.parse({ success: true, message: "Kontak dihapus." }));
