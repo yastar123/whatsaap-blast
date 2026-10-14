@@ -1,8 +1,9 @@
-import { and, count, eq, gte, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { and, count, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { db, pool, campaignsTable, contactsTable, blastJobsTable, blastJobSessionsTable, transactionsTable, usersTable, waSessionsTable } from "@workspace/db";
 import { logger } from "./logger";
 import {
   isWhatsAppConnectionError,
+  isLiveSessionReady,
   markSessionInUse,
   publishUserEvent,
   scheduleSessionIdleExpiry,
@@ -255,6 +256,20 @@ async function runBlast(
         sessionStatus = settings.allowDisconnectRequeue ? "offline" : "failed";
         break;
       }
+      if (!isLiveSessionReady(sessionId, userId, session.phone)) {
+        await db
+          .update(waSessionsTable)
+          .set({ status: "offline" })
+          .where(
+            and(
+              eq(waSessionsTable.id, sessionId),
+              eq(waSessionsTable.userId, userId),
+            ),
+          );
+        await releaseLocks(userId, sessionId);
+        sessionStatus = "offline";
+        break;
+      }
 
       if (await countSentLastHour(sessionId) >= settings.maxMessagesPerSessionPerHour) {
         await releaseLocks(userId, sessionId);
@@ -344,7 +359,19 @@ async function runBlast(
           isWhatsAppConnectionError(error) &&
           latestSession?.status === "online"
         ) {
-          await new Promise((resolve) => setTimeout(resolve, 150));
+          if (!isLiveSessionReady(sessionId, userId, session.phone)) {
+            await db
+              .update(waSessionsTable)
+              .set({ status: "offline" })
+              .where(
+                and(
+                  eq(waSessionsTable.id, sessionId),
+                  eq(waSessionsTable.userId, userId),
+                ),
+              );
+          } else {
+            await new Promise((resolve) => setTimeout(resolve, 150));
+          }
           [latestSession] = await db
             .select({ status: waSessionsTable.status })
             .from(waSessionsTable)
@@ -575,11 +602,31 @@ export async function startBlast(
     .limit(1);
   if (!activeCampaign) throw new Error("Admin belum memilih campaign aktif.");
 
-  const sessions = await db
+  const onlineSessions = await db
     .select()
     .from(waSessionsTable)
     .where(and(eq(waSessionsTable.userId, userId), eq(waSessionsTable.status, "online")));
+  const sessions: (typeof onlineSessions)[number][] = [];
+  const staleSessionIds: string[] = [];
+  for (const session of onlineSessions) {
+    if (isLiveSessionReady(session.id, userId, session.phone)) {
+      sessions.push(session);
+    } else {
+      staleSessionIds.push(session.id);
+    }
+  }
+  if (staleSessionIds.length > 0) {
+    await db
+      .update(waSessionsTable)
+      .set({ status: "offline" })
+      .where(inArray(waSessionsTable.id, staleSessionIds));
+  }
   if (sessions.length === 0) {
+    if (onlineSessions.length > 0) {
+      throw new Error(
+        "Sesi WhatsApp tersimpan sebagai online tetapi koneksi server tidak aktif. Hubungkan ulang sesi sebelum memulai blast.",
+      );
+    }
     throw new Error("Hubungkan setidaknya satu sesi WhatsApp sebelum memulai blast.");
   }
 

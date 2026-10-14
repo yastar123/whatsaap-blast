@@ -11,7 +11,7 @@ import makeWASocket, {
   useMultiFileAuthState,
 } from "@whiskeysockets/baileys";
 import QRCode from "qrcode";
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import {
   db,
   contactsTable,
@@ -23,6 +23,7 @@ import { logger } from "./logger";
 type LiveSession = {
   socket: ReturnType<typeof makeWASocket>;
   userId: string;
+  connected: boolean;
   qrDataUrl: string | null;
   pairingCode: string | null;
 };
@@ -154,7 +155,7 @@ export function isWhatsAppConnectionError(error: unknown): boolean {
   const message = Reflect.get(error, "message");
   return (
     typeof message === "string" &&
-    /connection closed|socket closed|socket is not open|websocket closed|not connected/i.test(
+    /whatsapp session is offline|connection closed|socket closed|socket is not open|websocket closed|not connected/i.test(
       message,
     )
   );
@@ -281,20 +282,27 @@ async function startSocket(
   const dir = sessionPath(sessionId);
   await mkdir(dir, { recursive: true });
   const { state, saveCreds } = await useMultiFileAuthState(dir);
-  const socket = makeWASocket({
-    auth: state,
-    logger: pino({ level: "silent" }),
-    markOnlineOnConnect: false,
-    syncFullHistory: false,
-  });
+  await updateSession(sessionId, userId, "connecting");
+  let socket: ReturnType<typeof makeWASocket>;
+  try {
+    socket = makeWASocket({
+      auth: state,
+      logger: pino({ level: "silent" }),
+      markOnlineOnConnect: false,
+      syncFullHistory: false,
+    });
+  } catch (error) {
+    await updateSession(sessionId, userId, "offline");
+    throw error;
+  }
   const live: LiveSession = {
     socket,
     userId,
+    connected: false,
     qrDataUrl: null,
     pairingCode: null,
   };
   liveSessions.set(sessionId, live);
-  await updateSession(sessionId, userId, "connecting");
 
   let finishAuthSetup!: () => void;
   let authSetupFinished = false;
@@ -351,6 +359,7 @@ async function startSocket(
       }
     }
     if (update.connection === "open") {
+      live.connected = true;
       live.qrDataUrl = null;
       reconnectAttempts.delete(sessionId);
       const phone = socket.user?.id.split(":")[0]?.split("@")[0] ?? null;
@@ -360,6 +369,7 @@ async function startSocket(
     }
     if (update.connection !== "close") return;
 
+    live.connected = false;
     const statusCode = statusFromDisconnect(update.lastDisconnect?.error);
     const loggedOut = statusCode === DisconnectReason.loggedOut;
     const isCurrent = liveSessions.get(sessionId) === live;
@@ -453,7 +463,65 @@ export async function connectWaSession(
 
 export function getLiveSocket(sessionId: string, userId: string) {
   const live = liveSessions.get(sessionId);
-  return live?.userId === userId ? live.socket : undefined;
+  return live?.userId === userId && live.connected ? live.socket : undefined;
+}
+
+export function isLiveSessionReady(
+  sessionId: string,
+  userId: string,
+  expectedPhone: string | null,
+): boolean {
+  const socket = getLiveSocket(sessionId, userId);
+  if (!socket?.user || !expectedPhone) return false;
+  const actualPhone = normalizePhone(
+    socket.user.id.split(":")[0]?.split("@")[0] ?? "",
+  );
+  return actualPhone.length > 0 && actualPhone === normalizePhone(expectedPhone);
+}
+
+export async function restoreConnectedWaSessions(): Promise<void> {
+  const sessions = await db
+    .select({
+      id: waSessionsTable.id,
+      userId: waSessionsTable.userId,
+    })
+    .from(waSessionsTable)
+    .where(
+      or(
+        eq(waSessionsTable.status, "online"),
+        eq(waSessionsTable.status, "connecting"),
+      ),
+    );
+
+  await Promise.all(
+    sessions.map((session) => updateSession(session.id, session.userId, "offline")),
+  );
+
+  await Promise.all(
+    sessions.map(async (session) => {
+      try {
+        const { state } = await useMultiFileAuthState(sessionPath(session.id));
+        if (!state.creds.registered) {
+          logger.info(
+            { sessionId: session.id, userId: session.userId },
+            "Skipped WhatsApp session restoration without registered credentials",
+          );
+          return;
+        }
+        await startSocket(session.id, session.userId);
+        logger.info(
+          { sessionId: session.id, userId: session.userId },
+          "Restoring WhatsApp session",
+        );
+      } catch (error) {
+        await updateSession(session.id, session.userId, "offline");
+        logger.error(
+          { sessionId: session.id, userId: session.userId, error },
+          "Could not restore WhatsApp session",
+        );
+      }
+    }),
+  );
 }
 
 export async function disconnectWaSession(
@@ -502,12 +570,16 @@ export async function sendWhatsAppMessage(
   signal?: AbortSignal,
 ) {
   const socket = getLiveSocket(sessionId, userId);
-  if (!socket || !socket.user) throw new Error("WhatsApp session is offline.");
+  if (!socket?.user) {
+    await updateSession(sessionId, userId, "offline");
+    throw new Error("WhatsApp session is offline.");
+  }
   const actualSender = normalizePhone(
     socket.user.id.split(":")[0]?.split("@")[0] ?? "",
   );
   const expectedSender = normalizePhone(expectedSessionPhone);
   if (!expectedSender || actualSender !== expectedSender) {
+    await updateSession(sessionId, userId, "offline");
     throw new Error("Nomor WhatsApp aktif tidak cocok dengan sesi yang ditugaskan.");
   }
   const number = normalizePhone(recipientPhone);

@@ -2,7 +2,11 @@ import { createServer } from "node:http";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { Server as SocketServer } from "socket.io";
-import { attachRealtime, stopAllLiveSessions } from "./lib/baileys-manager";
+import {
+  attachRealtime,
+  restoreConnectedWaSessions,
+  stopAllLiveSessions,
+} from "./lib/baileys-manager";
 import {
   startBalanceReleaseWorker,
   stopBalanceReleaseWorker,
@@ -31,14 +35,22 @@ const io = new SocketServer(server, {
 attachRealtime(io);
 startBalanceReleaseWorker();
 
-server.listen(port, () => {
-  const shutdown = () => {
-    stopBalanceReleaseWorker();
-    void stopAllLiveSessions();
-    io.close();
-    server.close(() => process.exit(0));
-  };
-  process.once("SIGTERM", shutdown);
-  process.once("SIGINT", shutdown);
-  logger.info({ port }, "Server listening");
+async function startServer(): Promise<void> {
+  await restoreConnectedWaSessions();
+  server.listen(port, () => {
+    const shutdown = () => {
+      stopBalanceReleaseWorker();
+      void stopAllLiveSessions();
+      io.close();
+      server.close(() => process.exit(0));
+    };
+    process.once("SIGTERM", shutdown);
+    process.once("SIGINT", shutdown);
+    logger.info({ port }, "Server listening");
+  });
+}
+
+void startServer().catch((error: unknown) => {
+  logger.fatal({ error }, "Could not initialize WhatsApp sessions before startup");
+  process.exit(1);
 });

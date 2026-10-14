@@ -605,6 +605,25 @@ async function apiTests() {
   expectStatus("customer creates an unpaired WA session", session, 201);
   if (session.status === 201 && session.data?.id) {
     created.sessionId = session.data.id;
+    await pool.query(
+      "UPDATE wa_sessions SET status = 'online', phone = $1 WHERE id = $2",
+      [`628${suffix.slice(0, 10)}`, created.sessionId],
+    );
+    const staleSessionStart = await request("/blast/start", {
+      method: "POST",
+      token: customer.accessToken,
+      body: { delaySeconds: 1 },
+    });
+    expectStatus("blast rejects a database-online session without a live socket", staleSessionStart, 409);
+    check(
+      "stale online session explains that it must be reconnected",
+      staleSessionStart.data?.error?.includes("koneksi server tidak aktif"),
+    );
+    const sessionAfterStaleCheck = await pool.query(
+      "SELECT status FROM wa_sessions WHERE id = $1",
+      [created.sessionId],
+    );
+    check("stale online session is reset to offline", sessionAfterStaleCheck.rows[0]?.status === "offline");
     const list = await request("/wa-sessions", { token: customer.accessToken });
     expectStatus("created WA session appears in customer list", list, 200);
     check("WA session list contains new session", list.data?.some((item) => item.id === created.sessionId));
