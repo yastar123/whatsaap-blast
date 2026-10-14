@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { Link, Route, Switch, useLocation } from 'wouter';
 import {
@@ -23,7 +23,8 @@ import {
   useLogin, useRegister, useLogout, useCreateWaSession, useConnectWaSession,
   useDeleteWaSession, useCreateCampaign, useUpdateCampaign, useDeleteCampaign, useActivateCampaign,
   useImportContacts, useDeleteContact, useStartBlast, useCancelBlast, useRequestWithdrawal,
-  useUpdateWithdrawal, useUpdateUserStatus, useUpdateSettings, setAuthTokenGetter
+  useUpdateWithdrawal, useUpdateUserStatus, useUpdateSettings, setAuthTokenGetter,
+  uploadCampaignImage
 } from '@workspace/api-client-react';
 import type { AppSettings, Campaign, Contact } from '@workspace/api-client-react';
 import { Toaster } from '@/components/ui/toaster';
@@ -543,13 +544,41 @@ function WithdrawalsPage({ role }: { role: string }) {
 }
 
 function CampaignsPage() {
-  const q = useListCampaigns(); const create = useCreateCampaign(); const update = useUpdateCampaign(); const remove = useDeleteCampaign(); const activate = useActivateCampaign(); const qc = useQueryClient(); const [editing, setEditing] = useState<Campaign | null>(null); const [creating, setCreating] = useState(false); const [form, setForm] = useState({ title: '', messageText: '', imageUrl: '', ctaText: '', ctaUrl: '' }); const [error, setError] = useState('');
+  const q = useListCampaigns(); const create = useCreateCampaign(); const update = useUpdateCampaign(); const remove = useDeleteCampaign(); const activate = useActivateCampaign(); const qc = useQueryClient(); const [editing, setEditing] = useState<Campaign | null>(null); const [creating, setCreating] = useState(false); const [form, setForm] = useState({ title: '', messageText: '', imageUrl: '', ctaText: '', ctaUrl: '' }); const [imageFile, setImageFile] = useState<File | null>(null); const [uploading, setUploading] = useState(false); const [error, setError] = useState('');
   const refresh = () => { qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); qc.invalidateQueries({ queryKey: getGetActiveCampaignQueryKey() }); qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); };
-  const openNew = () => { setEditing(null); setForm({ title: '', messageText: '', imageUrl: '', ctaText: '', ctaUrl: '' }); setCreating(true); setError(''); };
-  const openEdit = (c: Campaign) => { setEditing(c); setForm({ title: c.title, messageText: c.messageText, imageUrl: c.imageUrl || '', ctaText: c.ctaText || '', ctaUrl: c.ctaUrl || '' }); setCreating(true); setError(''); };
+  const openNew = () => { setEditing(null); setForm({ title: '', messageText: '', imageUrl: '', ctaText: '', ctaUrl: '' }); setImageFile(null); setCreating(true); setError(''); };
+  const openEdit = (c: Campaign) => { setEditing(c); setForm({ title: c.title, messageText: c.messageText, imageUrl: c.imageUrl || '', ctaText: c.ctaText || '', ctaUrl: c.ctaUrl || '' }); setImageFile(null); setCreating(true); setError(''); };
+  const handleImageChange = (file?: File) => {
+    setError('');
+    if (!file) { setImageFile(null); return; }
+    if (file.size > 25 * 1024 * 1024) { setImageFile(null); setError('Ukuran gambar maksimal 25 MB.'); return; }
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) { setImageFile(null); setError('Pilih gambar JPG, PNG, WebP, atau GIF.'); return; }
+    setImageFile(file);
+  };
+  const submitCampaign = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError('');
+    let imageUrl = form.imageUrl || null;
+    if (imageFile) {
+      setUploading(true);
+      try {
+        const result = await uploadCampaignImage({ image: imageFile });
+        imageUrl = result.imageUrl;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Gambar tidak dapat diunggah.');
+        setUploading(false);
+        return;
+      }
+      setUploading(false);
+    }
+    const body = { title: form.title, messageText: form.messageText, imageUrl, ctaText: form.ctaText || null, ctaUrl: form.ctaUrl || null };
+    if (editing) update.mutate({ campaignId: editing.id, data: body }, { onSuccess: () => { setCreating(false); refresh(); }, onError: err => setError(err instanceof Error ? err.message : 'Perubahan tidak tersimpan.') });
+    else create.mutate({ data: body }, { onSuccess: () => { setCreating(false); refresh(); }, onError: err => setError(err instanceof Error ? err.message : 'Kampanye tidak dapat dibuat.') });
+  };
+  const saving = uploading || create.isPending || update.isPending;
   if (q.isLoading) return <LoadingBlock />; if (q.isError) return <ErrorBlock retry={() => q.refetch()} />;
   return <><section className="panel campaigns-list-panel"><SectionTitle title="Daftar kampanye" detail={`${q.data?.length || 0} kampanye tersimpan`} action={<button className="button button-primary" onClick={openNew}><Plus size={15} /> Buat kampanye</button>} />{q.data?.length ? <div className="campaign-list">{q.data.map(c => <article className={`campaign-row ${c.isActive ? 'campaign-current' : ''}`} key={c.id}><div className="campaign-row-art"><MessageCircle size={20} /><span>{c.isActive ? 'SEDANG AKTIF' : 'KAMPANYE'}</span></div><div className="campaign-row-copy"><div className="campaign-title-row"><h3>{c.title}</h3><Status value={c.status} />{c.isActive && <span className="current-tag">TERPILIH</span>}</div><p>{c.messageText}</p><div className="campaign-stats"><span>{c.contactTotal.toLocaleString('id-ID')} kontak</span><span>{c.sentCount.toLocaleString('id-ID')} terkirim</span><span>{c.failedCount.toLocaleString('id-ID')} gagal</span><span>Dibuat {date(c.createdAt)}</span></div></div><div className="campaign-actions"><button className="button button-secondary button-small" onClick={() => openEdit(c)}>Ubah</button>{!c.isActive && <button className="button button-primary button-small" onClick={() => activate.mutate({ campaignId: c.id }, { onSuccess: refresh, onError: e => setError(e instanceof Error ? e.message : 'Kampanye tidak dapat diaktifkan.') })}>Aktifkan</button>}<button className="icon-button danger-icon" aria-label={`Hapus ${c.title}`} onClick={() => { if (window.confirm(`Hapus kampanye “${c.title}”?`)) remove.mutate({ campaignId: c.id }, { onSuccess: refresh, onError: e => setError(e instanceof Error ? e.message : 'Kampanye tidak dapat dihapus.') }); }}><X size={16} /></button></div></article>)}</div> : <Empty title="Belum ada kampanye" text="Buat kampanye untuk menyiapkan naskah pengiriman." />}{error && <div className="inline-error"><CircleAlert size={15} /> {error}</div>}</section>
-  {creating && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setCreating(false); }}><form className="modal-card" onSubmit={e => { e.preventDefault(); setError(''); const body = { title: form.title, messageText: form.messageText, imageUrl: form.imageUrl || null, ctaText: form.ctaText || null, ctaUrl: form.ctaUrl || null }; if (editing) update.mutate({ campaignId: editing.id, data: body }, { onSuccess: () => { setCreating(false); refresh(); }, onError: err => setError(err instanceof Error ? err.message : 'Perubahan tidak tersimpan.') }); else create.mutate({ data: body }, { onSuccess: () => { setCreating(false); refresh(); }, onError: err => setError(err instanceof Error ? err.message : 'Kampanye tidak dapat dibuat.') }); }}><div className="modal-top"><div><div className="eyebrow">KONFIGURASI KAMPANYE</div><h2>{editing ? 'Ubah kampanye' : 'Kampanye baru'}</h2></div><button type="button" className="icon-button" onClick={() => setCreating(false)}><X size={17} /></button></div><label>Nama kampanye<input required minLength={2} value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></label><label>Naskah pesan<textarea required rows={5} value={form.messageText} onChange={e => setForm({ ...form, messageText: e.target.value })} /></label><div className="form-split"><label>URL gambar <span className="optional">OPSIONAL</span><input type="url" value={form.imageUrl} onChange={e => setForm({ ...form, imageUrl: e.target.value })} placeholder="https://" /></label><label>Teks CTA <span className="optional">OPSIONAL</span><input value={form.ctaText} onChange={e => setForm({ ...form, ctaText: e.target.value })} /></label></div><label>URL CTA <span className="optional">OPSIONAL</span><input type="url" value={form.ctaUrl} onChange={e => setForm({ ...form, ctaUrl: e.target.value })} placeholder="https://" /></label>{error && <div className="inline-error"><CircleAlert size={15} /> {error}</div>}<div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setCreating(false)}>Batal</button><button className="button button-primary" disabled={create.isPending || update.isPending}>{editing ? 'Simpan perubahan' : 'Buat kampanye'}<ArrowUpRight size={15} /></button></div></form></div>}</>;
+  {creating && <div className="modal-backdrop" onMouseDown={e => { if (!saving && e.target === e.currentTarget) setCreating(false); }}><form className="modal-card" onSubmit={submitCampaign}><div className="modal-top"><div><div className="eyebrow">KONFIGURASI KAMPANYE</div><h2>{editing ? 'Ubah kampanye' : 'Kampanye baru'}</h2></div><button type="button" className="icon-button" disabled={saving} onClick={() => setCreating(false)}><X size={17} /></button></div><label>Nama kampanye<input required minLength={2} value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></label><label>Naskah pesan<textarea required rows={5} value={form.messageText} onChange={e => setForm({ ...form, messageText: e.target.value })} /></label><div className="form-split"><label>URL gambar <span className="optional">OPSIONAL</span><input type="url" value={form.imageUrl} onChange={e => setForm({ ...form, imageUrl: e.target.value })} placeholder="https://" /></label><label>Teks CTA <span className="optional">OPSIONAL</span><input value={form.ctaText} onChange={e => setForm({ ...form, ctaText: e.target.value })} /></label></div><label>Upload gambar dari perangkat <span className="optional">OPSIONAL · MAKS. 25 MB</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={e => handleImageChange(e.currentTarget.files?.[0])} />{imageFile && <span className="optional">{imageFile.name} · {(imageFile.size / (1024 * 1024)).toFixed(1)} MB</span>}<span className="optional">JPG, PNG, WebP, atau GIF. Jika dipilih, gambar ini akan menggantikan URL gambar di atas.</span></label><label>URL CTA <span className="optional">OPSIONAL</span><input type="url" value={form.ctaUrl} onChange={e => setForm({ ...form, ctaUrl: e.target.value })} placeholder="https://" /></label>{error && <div className="inline-error"><CircleAlert size={15} /> {error}</div>}<div className="modal-actions"><button type="button" className="button button-secondary" disabled={saving} onClick={() => setCreating(false)}>Batal</button><button className="button button-primary" disabled={saving}>{uploading ? 'Mengunggah gambar…' : editing ? 'Simpan perubahan' : 'Buat kampanye'}<ArrowUpRight size={15} /></button></div></form></div>}</>;
 }
 
 function ContactsPage() {

@@ -28,6 +28,8 @@ import type {
   BlastJob,
   BlastStartInput,
   Campaign,
+  CampaignImageUploadInput,
+  CampaignImageUploadResponse,
   CampaignInput,
   CampaignResultSummary,
   CampaignUpdate,
@@ -1378,6 +1380,82 @@ export const useCreateCampaign = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateCampaignMutationOptions(options));
+    }
+
+export const getUploadCampaignImageUrl = () => {
+
+
+
+
+  return `/api/admin/campaign-images`
+}
+
+/**
+ * @summary Upload a campaign image
+ */
+export const uploadCampaignImage = async (campaignImageUploadInput: CampaignImageUploadInput, options?: Parameters<typeof customFetch>[1]): Promise<CampaignImageUploadResponse> => {
+    const formData = new FormData();
+formData.append(`image`, campaignImageUploadInput.image);
+
+  return customFetch<CampaignImageUploadResponse>(getUploadCampaignImageUrl(),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
+  }
+);}
+
+
+
+
+
+export const getUploadCampaignImageMutationKey = () => ['uploadCampaignImage'] as const;
+
+export const getUploadCampaignImageMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadCampaignImage>>, TError,UploadCampaignImageMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadCampaignImage>>, TError,UploadCampaignImageMutationVariables, TContext> => {
+
+const mutationKey = getUploadCampaignImageMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadCampaignImage>>, UploadCampaignImageMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  uploadCampaignImage(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadCampaignImageMutationResult = NonNullable<Awaited<ReturnType<typeof uploadCampaignImage>>>
+    export type UploadCampaignImageMutationBody = BodyType<CampaignImageUploadInput>
+    export type UploadCampaignImageMutationError = ErrorType<void>
+    export type UploadCampaignImageMutationVariables = {data: BodyType<CampaignImageUploadInput>}
+
+    /**
+ * @summary Upload a campaign image
+ */
+export const useUploadCampaignImage = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadCampaignImage>>, TError,UploadCampaignImageMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof uploadCampaignImage>>,
+        TError,
+        UploadCampaignImageMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUploadCampaignImageMutationOptions(options));
     }
 
 export const getUpdateCampaignUrl = (campaignId: string,) => {

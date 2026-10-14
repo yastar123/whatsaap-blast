@@ -219,6 +219,14 @@ export interface CampaignInput {
   ctaUrl?: string | null;
 }
 
+export interface CampaignImageUploadResponse {
+  imageUrl: string;
+}
+
+export interface CampaignImageUploadInput {
+  image: Blob;
+}
+
 export type CampaignUpdateStatus = typeof CampaignUpdateStatus[keyof typeof CampaignUpdateStatus];
 
 

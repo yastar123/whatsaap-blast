@@ -19,7 +19,7 @@ Titipkirim adalah dashboard berbahasa Indonesia untuk mengelola kampanye WhatsAp
 ### Panel administrator
 
 - **Ringkasan** — metrik customer, sesi online, jumlah pesan terkirim, dan nilai pendapatan yang dibayarkan.
-- **Kampanye** — membuat, mengubah, mengaktifkan, dan menghapus kampanye yang memenuhi syarat.
+- **Kampanye** — membuat, mengubah, mengaktifkan, dan menghapus kampanye yang memenuhi syarat; gambar bisa dipilih dari perangkat (JPG, PNG, WebP, atau GIF, maksimal 25 MB) atau menggunakan URL.
 - **Kontak & consent** — mengimpor baris `nomor, sumber consent, waktu ISO`, mencari/memfilter kontak, melihat status serta bukti consent, dan menghapus kontak.
 - **Akun pengirim** — mencari customer dan mengaktifkan atau memblokir akunnya.
 - **Sesi semua pengirim** — memantau dan memutus sesi WhatsApp milik customer.
@@ -72,7 +72,7 @@ Semua route HTTP tersedia dengan prefiks `/api`; dokumentasi request/response le
 | Ringkasan | `GET /dashboard/overview`, `GET /campaigns/active` |
 | Sesi customer | `GET/POST /wa-sessions`, `POST /wa-sessions/{sessionId}/connect`, `DELETE /wa-sessions/{sessionId}` |
 | Sesi admin | `GET /admin/wa-sessions`, `DELETE /admin/wa-sessions/{sessionId}` |
-| Kampanye | `GET/POST /admin/campaigns`, `PATCH/DELETE /admin/campaigns/{campaignId}`, `POST /admin/campaigns/{campaignId}/activate` |
+| Kampanye | `GET/POST /admin/campaigns`, `PATCH/DELETE /admin/campaigns/{campaignId}`, `POST /admin/campaigns/{campaignId}/activate`, `POST /admin/campaign-images` (upload gambar, maksimal 25 MB) |
 | Kontak | `GET/POST /admin/contacts`, `DELETE /admin/contacts/{contactId}` |
 | Customer | `GET /admin/users`, `PATCH /admin/users/{userId}/status` |
 | Blast | `POST /blast/start`, `POST /blast/cancel`, `GET /blast/current` |
@@ -114,6 +114,8 @@ pnpm --filter @workspace/api-server run create-admin
 ```
 
 API memuat `.env` saat dijalankan. Web di luar Replit memakai `PORT` dan `BASE_PATH` (umumnya `PORT=3000`, `BASE_PATH=/`); API memakai `PORT` (contoh `5000`). Jangan menaruh secret di Git. Direktori `.wa-sessions/` dan `.env` tidak untuk di-commit.
+
+Gambar kampanye disimpan di direktori `uploads` pada working directory API. Atur `CAMPAIGN_UPLOAD_DIR` ke direktori persisten yang dapat ditulis jika deployment menggunakan filesystem sementara; file tersedia secara publik di `/api/uploads/` agar dapat diambil oleh WhatsApp.
 
 ## Pengembangan dan pengujian
 

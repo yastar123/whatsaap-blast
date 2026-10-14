@@ -1,4 +1,5 @@
 import express, { type Express } from "express";
+import { campaignImageDirectory } from "./lib/campaign-image-storage";
 import cors from "cors";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
@@ -30,6 +31,13 @@ app.use(
 );
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(cors({ origin: true, credentials: false }));
+app.use(
+  "/api/uploads",
+  express.static(campaignImageDirectory, {
+    maxAge: "1d",
+    immutable: true,
+  }),
+);
 app.use("/api", rateLimit({
   windowMs: 60_000,
   limit: 600,

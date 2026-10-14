@@ -1,4 +1,8 @@
 import { Router, type IRouter } from "express";
+import { open, unlink } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import multer, { MulterError } from "multer";
+import path from "node:path";
 import {
   and,
   count,
@@ -48,9 +52,107 @@ import {
 import { getAppSettings, saveAppSettings } from "../lib/app-settings";
 import { requireAdmin, requireAuth } from "../lib/auth";
 import { disconnectWaSession } from "../lib/baileys-manager";
+import { campaignImageDirectory } from "../lib/campaign-image-storage";
 
 const router: IRouter = Router();
 router.use("/admin", requireAuth, requireAdmin);
+
+const maxCampaignImageSize = 25 * 1024 * 1024;
+const campaignImageTypes = new Map([
+  ["image/jpeg", "jpg"],
+  ["image/png", "png"],
+  ["image/webp", "webp"],
+  ["image/gif", "gif"],
+]);
+
+const campaignImageUpload = multer({
+  storage: multer.diskStorage({
+    destination: campaignImageDirectory,
+    filename: (_req, file, callback) => {
+      const extension = campaignImageTypes.get(file.mimetype);
+      if (!extension) {
+        callback(new Error("Pilih gambar JPG, PNG, WebP, atau GIF."), "");
+        return;
+      }
+      callback(null, `${randomUUID()}.${extension}`);
+    },
+  }),
+  limits: {
+    fileSize: maxCampaignImageSize,
+    files: 1,
+    fields: 0,
+    parts: 1,
+  },
+  fileFilter: (_req, file, callback) => {
+    if (!campaignImageTypes.has(file.mimetype)) {
+      callback(new Error("Pilih gambar JPG, PNG, WebP, atau GIF."));
+      return;
+    }
+    callback(null, true);
+  },
+});
+
+async function hasValidImageSignature(file: Express.Multer.File): Promise<boolean> {
+  const handle = await open(file.path, "r");
+  try {
+    const header = Buffer.alloc(12);
+    const { bytesRead } = await handle.read(header, 0, header.length, 0);
+    const bytes = header.subarray(0, bytesRead);
+    switch (file.mimetype) {
+      case "image/jpeg":
+        return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+      case "image/png":
+        return bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+      case "image/webp":
+        return bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP";
+      case "image/gif":
+        return bytes.toString("ascii", 0, 6) === "GIF87a" || bytes.toString("ascii", 0, 6) === "GIF89a";
+      default:
+        return false;
+    }
+  } finally {
+    await handle.close();
+  }
+}
+
+router.post(
+  "/admin/campaign-images",
+  (req, res, next): void => {
+    campaignImageUpload.single("image")(req, res, (error: unknown) => {
+      if (error instanceof MulterError) {
+        const status = error.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+        res.status(status).json({
+          error: error.code === "LIMIT_FILE_SIZE"
+            ? "Ukuran gambar maksimal 25 MB."
+            : "File gambar tidak valid.",
+        });
+        return;
+      }
+      if (error) {
+        res.status(400).json({
+          error: error instanceof Error ? error.message : "Gambar tidak dapat diunggah.",
+        });
+        return;
+      }
+      next();
+    });
+  },
+  async (req, res): Promise<void> => {
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: "Pilih gambar untuk diunggah." });
+      return;
+    }
+    if (!(await hasValidImageSignature(file))) {
+      await unlink(file.path);
+      res.status(400).json({ error: "Isi file tidak sesuai dengan format gambar." });
+      return;
+    }
+    res.status(201).json({
+      imageUrl: `${req.protocol}://${req.get("host")}/api/uploads/${path.basename(file.filename)}`,
+    });
+  },
+);
 
 async function campaignDto(campaign: typeof campaignsTable.$inferSelect) {
   const [counts] = await db

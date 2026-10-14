@@ -330,6 +330,18 @@ export const CreateCampaignResponse = zod.object({
 
 
 /**
+ * @summary Upload a campaign image
+ */
+export const UploadCampaignImageBody = zod.object({
+  "image": zod.instanceof(Blob)
+})
+
+export const UploadCampaignImageResponse = zod.object({
+  "imageUrl": zod.string().url()
+})
+
+
+/**
  * @summary Update a campaign
  */
 export const UpdateCampaignParams = zod.object({

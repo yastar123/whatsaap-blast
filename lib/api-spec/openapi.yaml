@@ -280,6 +280,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Campaign"
+  /admin/campaign-images:
+    post:
+      operationId: uploadCampaignImage
+      tags: [campaigns, admin]
+      summary: Upload a campaign image
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/CampaignImageUploadInput"
+      responses:
+        "201":
+          description: Campaign image uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignImageUploadResponse"
+        "400":
+          description: Invalid image file
+        "413":
+          description: Image exceeds the 25 MB limit
   /admin/campaigns/{campaignId}:
     patch:
       operationId: updateCampaign
@@ -843,6 +865,16 @@ components:
         ctaText: { type: ["string", "null"] }
         ctaUrl: { type: ["string", "null"], format: uri }
       required: [title, messageText]
+    CampaignImageUploadResponse:
+      type: object
+      properties:
+        imageUrl: { type: string, format: uri }
+      required: [imageUrl]
+    CampaignImageUploadInput:
+      type: object
+      properties:
+        image: { type: string, format: binary }
+      required: [image]
     CampaignUpdate:
       type: object
       properties:
@@ -1077,4 +1109,3 @@ components:
         maxMessagesPerSessionPerHour: { type: integer, minimum: 1, maximum: 60 }
         sessionIdleMinutes: { type: integer, minimum: 1, maximum: 1440 }
         allowDisconnectRequeue: { type: boolean }
-
