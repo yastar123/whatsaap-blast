@@ -324,18 +324,34 @@ function DashboardPage({ user }: { user: { role: string; id: string } }) {
 
 function WhatsAppPage() {
   const qc = useQueryClient(); const sessions = useListWaSessions(); const create = useCreateWaSession(); const connect = useConnectWaSession(); const remove = useDeleteWaSession();
-  const [label, setLabel] = useState(''); const [selected, setSelected] = useState(''); const [mode, setMode] = useState<'qr' | 'pairing_code'>('qr'); const [phone, setPhone] = useState(''); const [authData, setAuthData] = useState<{qrDataUrl?: string | null; pairingCode?: string | null} | null>(null); const [error, setError] = useState('');
+  const [label, setLabel] = useState(''); const [selected, setSelected] = useState(''); const [mode, setMode] = useState<'qr' | 'pairing_code'>('qr'); const [phone, setPhone] = useState(''); const [authData, setAuthData] = useState<{qrDataUrl?: string | null; pairingCode?: string | null} | null>(null); const [error, setError] = useState(''); const [realtimeError, setRealtimeError] = useState('');
   const refresh = () => qc.invalidateQueries({ queryKey: getListWaSessionsQueryKey() });
   useEffect(() => {
     let socket: ReturnType<typeof io> | null = null;
     let disposed = false;
     void getAccessToken().then(token => {
       if (!token || disposed) return;
-      socket = io({ path: '/api/socket.io', auth: { token }, transports: ['websocket', 'polling'] });
+      socket = io({
+        path: '/api/socket.io',
+        auth: callback => {
+          void getAccessToken()
+            .then(refreshedToken => callback(refreshedToken ? { token: refreshedToken } : {}))
+            .catch(() => callback({}));
+        },
+        transports: ['polling', 'websocket'],
+      });
       socket.on('wa:qr', (event: { qrDataUrl: string }) => setAuthData({ qrDataUrl: event.qrDataUrl }));
       socket.on('wa:pairing-code', (event: { pairingCode: string }) => setAuthData({ pairingCode: event.pairingCode }));
       socket.on('wa:status', () => refresh());
-      socket.on('connect_error', () => setError('Koneksi realtime terputus. Muat ulang pairing jika kode tidak muncul.'));
+      socket.on('connect', () => setRealtimeError(''));
+      socket.on('connect_error', () => {
+        if (!socket?.connected) setRealtimeError('Koneksi realtime terputus. Coba muat ulang halaman atau pairing.');
+      });
+      socket.on('disconnect', () => {
+        if (!disposed) setRealtimeError('Koneksi realtime terputus. Menghubungkan kembali…');
+      });
+    }).catch(() => {
+      if (!disposed) setRealtimeError('Token sesi tidak dapat diperbarui untuk koneksi realtime.');
     });
     return () => { disposed = true; socket?.disconnect(); };
   }, []);
@@ -345,7 +361,7 @@ function WhatsAppPage() {
     {sessions.data?.length ? <div className="session-table">{sessions.data.map(s => <div className="session-manage-row" key={s.id}><div className="session-icon"><Smartphone size={18} /></div><div className="session-copy"><b>{s.label}</b><span>{s.phone || 'Nomor belum terhubung'}{s.lastConnectedAt ? ` · Terakhir ${date(s.lastConnectedAt)}` : ''}</span></div><Status value={s.status} /><button className="button button-secondary button-small" disabled={connect.isPending} onClick={() => connectSession(s.id)}><QrCode size={14} /> Pairing</button><button aria-label={`Hapus ${s.label}`} className="icon-button danger-icon" onClick={() => { if (window.confirm(`Hapus sesi ${s.label}?`)) remove.mutate({ sessionId: s.id }, { onSuccess: refresh, onError: e => setError(e instanceof Error ? e.message : 'Sesi tidak dapat dihapus.') }); }}><X size={16} /></button></div>)}</div> : <Empty title="Belum ada sesi terhubung" text="Tambahkan sesi untuk mulai pairing melalui QR atau kode." />}
     <form className="add-session-form" onSubmit={e => { e.preventDefault(); create.mutate({ data: { label } }, { onSuccess: s => { setLabel(''); setSelected(s.id); refresh(); connectSession(s.id); }, onError: err => setError(err instanceof Error ? err.message : 'Sesi tidak dapat dibuat.') }); }}><div className="add-session-label"><Plus size={16} /> Tambahkan sesi baru</div><div className="inline-form"><input required maxLength={40} value={label} onChange={e => setLabel(e.target.value)} placeholder="Contoh: Tim Bandung" aria-label="Nama sesi" /><button className="button button-primary" disabled={create.isPending}><Plus size={15} /> Buat sesi</button></div></form>
   </section><aside className="pairing-column"><section className="panel pairing-panel"><div className="pair-eyebrow"><span /> PAIRING DEVICE</div><h2>Hubungkan<br />WhatsApp Anda</h2><p>Gunakan QR atau kode pairing untuk menghubungkan sesi dengan aman.</p><div className="pair-tabs"><button onClick={() => { setMode('qr'); setAuthData(null); }} className={mode === 'qr' ? 'pair-tab active' : 'pair-tab'}>Kode QR</button><button onClick={() => { setMode('pairing_code'); setAuthData(null); }} className={mode === 'pairing_code' ? 'pair-tab active' : 'pair-tab'}>Kode nomor</button></div>{mode === 'pairing_code' && <label className="pair-input-label">Nomor WhatsApp<input value={phone} onChange={e => setPhone(e.target.value)} placeholder="62812xxxxxxxx" /></label>}
-    <div className="qr-box">{authData?.qrDataUrl ? <img className="qr-image" src={authData.qrDataUrl} alt="Kode QR WhatsApp untuk pairing" /> : authData?.pairingCode ? <div className="pairing-code">{authData.pairingCode}</div> : <div className="qr-placeholder"><QrCode size={42} /><span>{selected ? 'Siap dipindai dari WhatsApp' : 'Pilih sesi untuk mulai pairing'}</span></div>}</div>{error && <div className="inline-error"><CircleAlert size={15} /> {error}</div>}<button className="button button-primary connect-button" disabled={!selected || connect.isPending || (mode === 'pairing_code' && !phone)} onClick={() => connectSession(selected)}>{connect.isPending ? 'Menyiapkan pairing...' : authData ? 'Muat ulang kode' : 'Mulai pairing'}<ArrowUpRight size={15} /></button><div className="qr-instructions"><span>01</span><p>Buka WhatsApp di ponsel Anda</p><span>02</span><p>Pilih <b>Perangkat tertaut</b> lalu pindai kode</p></div></section><div className="safe-note"><ShieldCheck size={16} /><p><b>Sesi terkendali</b><br />Kami tidak menggunakan rotasi akun otomatis. Setiap sesi dikelola terpisah.</p></div></aside></div>;
+    <div className="qr-box">{authData?.qrDataUrl ? <img className="qr-image" src={authData.qrDataUrl} alt="Kode QR WhatsApp untuk pairing" /> : authData?.pairingCode ? <div className="pairing-code">{authData.pairingCode}</div> : <div className="qr-placeholder"><QrCode size={42} /><span>{selected ? 'Siap dipindai dari WhatsApp' : 'Pilih sesi untuk mulai pairing'}</span></div>}</div>{realtimeError && <div className="inline-error"><CircleAlert size={15} /> {realtimeError}</div>}{error && <div className="inline-error"><CircleAlert size={15} /> {error}</div>}<button className="button button-primary connect-button" disabled={!selected || connect.isPending || (mode === 'pairing_code' && !phone)} onClick={() => connectSession(selected)}>{connect.isPending ? 'Menyiapkan pairing...' : authData ? 'Muat ulang kode' : 'Mulai pairing'}<ArrowUpRight size={15} /></button><div className="qr-instructions"><span>01</span><p>Buka WhatsApp di ponsel Anda</p><span>02</span><p>Pilih <b>Perangkat tertaut</b> lalu pindai kode</p></div></section><div className="safe-note"><ShieldCheck size={16} /><p><b>Sesi terkendali</b><br />Kami tidak menggunakan rotasi akun otomatis. Setiap sesi dikelola terpisah.</p></div></aside></div>;
 }
 
 function BlastPage({ role }: { role: string }) {
