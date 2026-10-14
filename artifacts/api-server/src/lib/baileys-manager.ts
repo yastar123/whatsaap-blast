@@ -6,7 +6,6 @@ import pino from "pino";
 import makeWASocket, {
   DisconnectReason,
   generateMessageIDV2,
-  generateWAMessageFromContent,
   prepareWAMessageMedia,
   proto,
   useMultiFileAuthState,
@@ -626,11 +625,7 @@ export async function sendWhatsAppMessage(
         messageVersion: 1,
       },
     });
-    buttonMessage = proto.Message.fromObject({
-      viewOnceMessage: {
-        message: { interactiveMessage },
-      },
-    });
+    buttonMessage = proto.Message.fromObject({ interactiveMessage });
   }
   let lastError: unknown;
 
@@ -652,18 +647,30 @@ export async function sendWhatsAppMessage(
     try {
       if (ctaUrl) {
         if (!buttonMessage) throw new Error("Tombol CTA tidak dapat disiapkan.");
-        const generatedMessage = generateWAMessageFromContent(
-          jid,
-          buttonMessage,
-          { userJid: sendSocket.user!.id, messageId },
-        );
-        if (!generatedMessage.message) {
-          throw new Error("Pesan CTA tidak dapat dibentuk oleh Baileys.");
-        }
         return await sendSocket.relayMessage(
           jid,
-          generatedMessage.message,
-          { messageId },
+          buttonMessage,
+          {
+            messageId,
+            additionalNodes: [
+              {
+                tag: "biz",
+                attrs: {},
+                content: [
+                  {
+                    tag: "interactive",
+                    attrs: { type: "native_flow", v: "1" },
+                    content: [
+                      {
+                        tag: "native_flow",
+                        attrs: { v: "9", name: "mixed" },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
         );
       }
       const messageContent = content.imageUrl
