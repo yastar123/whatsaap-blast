@@ -283,7 +283,7 @@ Admin dapat:
 1. Hanya kontak dengan consent aktif yang boleh dijadikan target pengiriman.
 2. Data consent harus menyertakan sumber dan waktu ISO.
 3. Waktu consent tidak boleh berada di masa depan.
-4. Contact placeholder seed tidak memenuhi syarat.
+4. Hanya kontak dengan consent aktif yang memenuhi syarat.
 5. Nomor duplikat dalam campaign yang sama tidak dimasukkan ulang.
 6. Customer harus punya sesi WhatsApp online untuk menjalankan blast.
 7. Sesi online dapat berjalan paralel, tapi dibatasi oleh delay pilihan dan quota per sesi per jam.
@@ -522,7 +522,7 @@ Nilai awal yang tertanam di aplikasi:
 - `artifacts/wa-campaign/` — frontend React/Vite dan dashboard web
 - `artifacts/api-server/src/routes/` — route API
 - `artifacts/api-server/src/lib/` — auth, Baileys pairing, blast worker, wallet, settings
-- `artifacts/api-server/src/seed.ts` — seed data untuk development
+- `artifacts/api-server/src/create-admin.ts` — bootstrap akun admin dari environment
 - `artifacts/api-server/src/smoke-test.mjs` — smoke test API dan halaman
 - `lib/api-spec/openapi.yaml` — sumber kontrak endpoint
 - `lib/api-client-react/` — client generated
@@ -624,26 +624,15 @@ Pada Replit, path dan port diberikan secara otomatis. Buka preview web di `/`, b
 ```sh
 pnpm install --frozen-lockfile
 pnpm run db:push:backup
-pnpm --filter @workspace/api-server run seed
+pnpm --filter @workspace/api-server run create-admin
 ```
 
 ### Variabel Penting
 
 - `DATABASE_URL` — database PostgreSQL yang dipakai project.
 - `SESSION_SECRET` — secret untuk JWT, rekening terenkripsi, dan bentuk sesi Baileys.
-
-### Demo Account
-
-Seed development berisi akun demo:
-
-- `admin@demo.local`
-- `customer@demo.local`
-
-Password default seed:
-
-- `DemoOnly2026!`
-
-Peringatan: akun demo tidak boleh dipakai untuk deployment atau data nyata.
+- `ADMIN_EMAIL` dan `ADMIN_PASSWORD` — kredensial bootstrap admin; sandi minimal 12 karakter.
+- Tidak ada data demo yang dibuat otomatis. Untuk lokal, API dan Drizzle membaca `.env` di root workspace; di Replit, `DATABASE_URL` berasal dari database terkelola dan kredensial admin disimpan di Secrets.
 
 ---
 

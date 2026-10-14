@@ -11,7 +11,11 @@ if (!/^http:\/\/(localhost|127\.0\.0\.1):/.test(apiBase)) {
   throw new Error("API_BASE_URL must point to a local development server.");
 }
 
-const demoPassword = process.env.SEED_DEMO_PASSWORD ?? "DemoOnly2026!";
+const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+const adminPassword = process.env.ADMIN_PASSWORD;
+if (!adminEmail || !adminPassword) {
+  throw new Error("Set ADMIN_EMAIL and ADMIN_PASSWORD before running the smoke test.");
+}
 const suffix = randomUUID();
 const testEmail = `qa-${suffix}@example.invalid`;
 const testPassword = `Qa-${suffix}-T8!`;
@@ -104,9 +108,9 @@ async function apiTests() {
 
   const adminLogin = await request("/auth/login", {
     method: "POST",
-    body: { email: "admin@demo.local", password: demoPassword },
+    body: { email: adminEmail, password: adminPassword },
   });
-  expectStatus("demo admin login", adminLogin, 200);
+  expectStatus("configured admin login", adminLogin, 200);
   if (!adminLogin.data?.accessToken || !adminLogin.data?.user?.id) {
     throw new Error("Demo admin login did not return an authenticated user.");
   }

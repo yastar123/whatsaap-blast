@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
     "build": "node ./build.mjs",
-    "seed": "tsx src/seed.ts",
-    "test:smoke": "tsx ./src/smoke-test.mjs",
-    "start": "node --enable-source-maps ./dist/index.mjs",
+    "create-admin": "node --env-file-if-exists=../../.env --import tsx src/create-admin.ts",
+    "test:smoke": "node --env-file-if-exists=../../.env --import tsx src/smoke-test.mjs",
+    "start": "node --env-file-if-exists=../../.env --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

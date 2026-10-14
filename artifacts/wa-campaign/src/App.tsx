@@ -127,11 +127,6 @@ function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   });
   const [error, setError] = useState('');
 
-  const chooseDemoAccount = (email: string) => {
-    setForm(current => ({ ...current, email, password: 'DemoOnly2026!' }));
-    setError('');
-  };
-
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -208,34 +203,6 @@ function AuthPage({ mode }: { mode: 'login' | 'register' }) {
             ? 'Mulai kelola pengiriman Anda dengan aman.'
             : 'Gunakan akun yang terdaftar untuk melanjutkan.'}
         </p>
-        {!registerMode && import.meta.env.DEV && (
-          <section className="demo-login" aria-label="Pilih akun demo">
-            <div className="demo-login-heading">
-              <b>Akun demo</b>
-              <span>Klik akun untuk mengisi email dan kata sandi demo.</span>
-            </div>
-            <div className="demo-login-options">
-              <button
-                type="button"
-                className={`demo-login-option ${form.email === 'admin@demo.local' ? 'demo-login-option-selected' : ''}`}
-                aria-pressed={form.email === 'admin@demo.local'}
-                onClick={() => chooseDemoAccount('admin@demo.local')}
-              >
-                <ShieldCheck size={16} />
-                <span><b>Admin</b><small>admin@demo.local</small></span>
-              </button>
-              <button
-                type="button"
-                className={`demo-login-option ${form.email === 'customer@demo.local' ? 'demo-login-option-selected' : ''}`}
-                aria-pressed={form.email === 'customer@demo.local'}
-                onClick={() => chooseDemoAccount('customer@demo.local')}
-              >
-                <UserRound size={16} />
-                <span><b>Customer</b><small>customer@demo.local</small></span>
-              </button>
-            </div>
-          </section>
-        )}
         <form onSubmit={submit} className="auth-form">
           {registerMode && (
             <label>

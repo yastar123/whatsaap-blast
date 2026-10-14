@@ -2,7 +2,7 @@
 
 Titipkirim adalah dashboard berbahasa Indonesia untuk mengelola kampanye WhatsApp berbasis persetujuan (consent), sesi pengirim, hasil pesan, referral, saldo, dan penarikan. Produk memiliki portal customer dan panel administrator.
 
-> **Penting:** kirim pesan hanya kepada penerima yang memberikan persetujuan aktif. Jangan menggunakan 300 kontak seed untuk pengiriman: semuanya nomor placeholder tanpa bukti consent dan tidak memenuhi syarat antrean. Hormati permintaan berhenti (opt-out).
+> **Penting:** kirim pesan hanya kepada penerima yang memberikan persetujuan aktif. Impor hanya nomor dengan bukti consent yang valid, dan hormati permintaan berhenti (opt-out).
 
 ## Isi aplikasi
 
@@ -32,7 +32,7 @@ Halaman terdaftar: `/`, `/login`, `/register`, `/whatsapp`, `/blast`, `/results`
 
 1. Admin membuat kampanye, memasukkan naskah, mengimpor nomor, lalu mengaktifkan kampanye.
 2. Saat impor, setiap kontak harus memiliki nomor valid, sumber consent, dan tanggal/waktu persetujuan yang tidak berada di masa depan. Nomor dinormalisasi ke angka; nomor duplikat di kampanye yang sama tidak dimasukkan ulang.
-3. Pekerja blast memeriksa ulang bahwa sumber dan waktu consent ada serta consent belum dicabut sebelum mengklaim kontak. Klaim menggunakan penguncian database agar sesi paralel tidak mengambil kontak yang sama. Kontak placeholder seed tidak memenuhi syarat.
+3. Pekerja blast memeriksa ulang bahwa sumber dan waktu consent ada serta consent belum dicabut sebelum mengklaim kontak. Klaim menggunakan penguncian database agar sesi paralel tidak mengambil kontak yang sama.
 4. Customer harus mempunyai sesi WhatsApp **online** untuk memulai blast. Sesi yang sudah online berjalan paralel; laju tetap dibatasi oleh jeda pilihan dan batas per jam pada pengaturan.
 5. Progres dan status sesi/pesan dipublikasikan melalui Socket.IO. Hasil juga tersimpan di database dan dapat diekspor.
 6. Pendapatan selama blast masuk ke saldo berjalan. Saat pekerjaan selesai atau dibatalkan, saldo berjalan dipindahkan ke saldo utama. Bonus referral masuk ke saldo utama.
@@ -54,7 +54,7 @@ Nilai awal pengaturan: Rp1.100 per pesan berhasil, bonus referral Rp60 per pesan
 | `artifacts/wa-campaign/` | Frontend React/Vite dan halaman dashboard |
 | `artifacts/api-server/src/routes/` | Route API |
 | `artifacts/api-server/src/lib/` | Auth, pairing Baileys, worker blast, saldo, dan pengaturan |
-| `artifacts/api-server/src/seed.ts` | Data demo development |
+| `artifacts/api-server/src/create-admin.ts` | Membuat atau memperbarui akun admin dari environment |
 | `artifacts/api-server/src/smoke-test.mjs` | Tes integrasi API dan halaman |
 | `lib/api-spec/openapi.yaml` | Kontrak endpoint |
 | `lib/api-client-react/`, `lib/api-zod/` | Client dan validasi hasil codegen |
@@ -96,29 +96,24 @@ Setup pertama:
 ```sh
 pnpm install --frozen-lockfile
 pnpm run db:push:backup
-pnpm --filter @workspace/api-server run seed
+pnpm --filter @workspace/api-server run create-admin
 ```
 
-`db:push:backup` membuat backup PostgreSQL lebih dulu, lalu menerapkan skema development dengan Drizzle. Setelah itu jalankan kedua workflow di atas. `DATABASE_URL` disediakan untuk database Replit; `SESSION_SECRET` harus tersedia sebagai Replit Secret karena digunakan untuk JWT, data rekening terenkripsi, dan sesi Baileys.
+Sebelum perintah tersebut, atur `ADMIN_EMAIL` dan `ADMIN_PASSWORD` di Replit Secrets, atau isi variabelnya pada `.env` lokal. `ADMIN_PASSWORD` harus minimal 12 karakter. Perintah `create-admin` membuat akun admin bila belum ada, atau memperbarui sandi akun admin dengan email yang sama; email yang sudah dipakai akun customer akan ditolak. `DATABASE_URL` disediakan otomatis oleh database Replit; untuk PostgreSQL lokal, isi di `.env`. API dan Drizzle membaca `.env` dari root workspace. `SESSION_SECRET` juga harus tersedia sebagai Replit Secret atau di `.env` lokal.
 
-### Akun demo
-
-Seed development membuat `admin@demo.local` dan `customer@demo.local`, kampanye contoh draf, pengaturan awal, dan 300 kontak placeholder tanpa consent. Kata sandi bawaan seed adalah `DemoOnly2026!`; dapat diganti dengan variabel `SEED_DEMO_PASSWORD` sebelum seed dijalankan. **Jangan gunakan akun/kata sandi demo pada deployment atau untuk data nyata.** Seed menolak berjalan dengan `NODE_ENV=production`.
+Tidak ada akun, kampanye, kontak, atau data demo yang dibuat otomatis. Data dashboard dibaca dari database yang ditentukan oleh `DATABASE_URL`.
 
 ### Lingkungan lokal
 
-Salin `.env.example` ke `.env`, isi URL PostgreSQL development dan secret development sendiri, lalu muat variabel ke shell sebelum menjalankan perintah:
+Salin `.env.example` ke `.env`, lalu isi URL PostgreSQL lokal serta `SESSION_SECRET`, `ADMIN_EMAIL`, dan `ADMIN_PASSWORD`. File `.env` diabaikan Git. Jangan gunakan database production untuk uji coba.
 
 ```sh
 cp .env.example .env
-set -a
-. ./.env
-set +a
 pnpm run db:push:backup
-pnpm --filter @workspace/api-server run seed
+pnpm --filter @workspace/api-server run create-admin
 ```
 
-Web di luar Replit memakai `PORT` dan `BASE_PATH` (umumnya `PORT=3000`, `BASE_PATH=/`); API memakai `PORT` (contoh `5000`). Jangan menaruh secret di Git. Direktori `.wa-sessions/` dan `.env` tidak untuk di-commit.
+API memuat `.env` saat dijalankan. Web di luar Replit memakai `PORT` dan `BASE_PATH` (umumnya `PORT=3000`, `BASE_PATH=/`); API memakai `PORT` (contoh `5000`). Jangan menaruh secret di Git. Direktori `.wa-sessions/` dan `.env` tidak untuk di-commit.
 
 ## Pengembangan dan pengujian
 
@@ -129,11 +124,11 @@ pnpm --filter @workspace/api-server run typecheck
 pnpm --filter @workspace/api-server run test:smoke
 pnpm run db:backup
 pnpm run db:push:backup
-pnpm --filter @workspace/api-server run seed
+pnpm --filter @workspace/api-server run create-admin
 pnpm --filter @workspace/api-spec run codegen
 ```
 
-Smoke test memeriksa route HTML, endpoint kesehatan, login/register dan rotasi token, pemisahan hak akses, CRUD kampanye, validasi impor/consent, sesi tanpa pairing, hasil/ekspor, saldo dan transisi/refund penarikan. Test menulis data QA sementara ke **database development** lalu membersihkannya. Jalankan hanya ketika kedua workflow aktif, database development dan akun demo sudah disiapkan; test menolak mode production. Test tidak memindai QR, memasangkan nomor sungguhan, maupun mengirim pesan WhatsApp.
+Smoke test memeriksa route HTML, endpoint kesehatan, login/register dan rotasi token, pemisahan hak akses, CRUD kampanye, validasi impor/consent, sesi tanpa pairing, hasil/ekspor, saldo dan transisi/refund penarikan. Test menulis data QA sementara ke **database development** lalu membersihkannya. Jalankan hanya ketika kedua workflow aktif, skema database development sudah diterapkan, dan kredensial admin tersedia; test menolak mode production. Test tidak memindai QR, memasangkan nomor sungguhan, maupun mengirim pesan WhatsApp.
 
 Untuk mengubah API: edit OpenAPI terlebih dahulu, jalankan codegen, lalu sesuaikan route dan client. Skema dikembangkan dengan Drizzle `push`; repo ini tidak menyimpan direktori migrasi SQL. Sebelum perubahan skema, gunakan `pnpm run db:push:backup`. Backup custom-format tersimpan di `generated-artifacts/database-backups/` (diabaikan Git/deployment); untuk memulihkan, gunakan alat PostgreSQL seperti `pg_restore` dengan database target yang benar.
 
@@ -141,6 +136,6 @@ Untuk mengubah API: edit OpenAPI terlebih dahulu, jalankan codegen, lalu sesuaik
 
 - Kata sandi di-hash dengan bcrypt. Access token berlaku 15 menit; refresh token acak berlaku tujuh hari, disimpan sebagai hash dan diputar saat refresh.
 - Nilai rekening dienkripsi dengan AES-256-GCM menggunakan kunci turunan `SESSION_SECRET`; respons customer menyamarkan nomor rekening, sedangkan admin yang berwenang dapat melihat detail untuk transfer manual.
-- Seed dan smoke test hanya untuk development. Jangan menjalankan seed/test terhadap production atau mengirim broadcast selama pengujian.
+- Smoke test hanya untuk development. Jangan menjalankan test terhadap production atau mengirim broadcast selama pengujian.
 - Pengiriman WhatsApp nyata memerlukan perangkat/nomor customer yang ditautkan, sesi online, kampanye aktif, dan kontak yang benar-benar memberi consent. Perilaku pairing jaringan dan pengiriman end-to-end perlu diuji menggunakan nomor uji yang dikendalikan pemiliknya; smoke test otomatis tidak mengirim pesan.
 - Pengelola sesi mengikuti protokol Baileys tidak resmi. Perubahan/ketidaktersediaan WhatsApp dapat memengaruhi pairing atau pengiriman dan tidak dapat disimulasikan oleh tes lokal.
