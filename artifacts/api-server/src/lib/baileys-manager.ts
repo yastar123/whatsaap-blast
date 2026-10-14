@@ -6,6 +6,7 @@ import pino from "pino";
 import makeWASocket, {
   DisconnectReason,
   generateMessageIDV2,
+  generateWAMessageFromContent,
   prepareWAMessageMedia,
   proto,
   useMultiFileAuthState,
@@ -604,27 +605,30 @@ export async function sendWhatsAppMessage(
           { upload: socket.waUploadToServer },
         )
       : undefined;
+    const interactiveMessage = proto.Message.InteractiveMessage.fromObject({
+      header: {
+        hasMediaAttachment: Boolean(media?.imageMessage),
+        ...(media?.imageMessage ? { imageMessage: media.imageMessage } : {}),
+      },
+      body: { text: content.text },
+      footer: { text: "Balas BERHENTI untuk berhenti menerima pesan." },
+      nativeFlowMessage: {
+        buttons: [
+          {
+            name: "cta_url",
+            buttonParamsJson: JSON.stringify({
+              display_text: ctaText || "Buka tautan",
+              url: ctaUrl,
+              merchant_url: ctaUrl,
+            }),
+          },
+        ],
+        messageVersion: 1,
+      },
+    });
     buttonMessage = proto.Message.fromObject({
-      interactiveMessage: {
-        header: {
-          hasMediaAttachment: Boolean(media?.imageMessage),
-          ...(media?.imageMessage ? { imageMessage: media.imageMessage } : {}),
-        },
-        body: { text: content.text },
-        footer: { text: "Balas BERHENTI untuk berhenti menerima pesan." },
-        nativeFlowMessage: {
-          buttons: [
-            {
-              name: "cta_url",
-              buttonParamsJson: JSON.stringify({
-                display_text: ctaText || "Buka tautan",
-                url: ctaUrl,
-                merchant_url: ctaUrl,
-              }),
-            },
-          ],
-          messageVersion: 1,
-        },
+      viewOnceMessage: {
+        message: { interactiveMessage },
       },
     });
   }
@@ -648,7 +652,19 @@ export async function sendWhatsAppMessage(
     try {
       if (ctaUrl) {
         if (!buttonMessage) throw new Error("Tombol CTA tidak dapat disiapkan.");
-        return await sendSocket.relayMessage(jid, buttonMessage, { messageId });
+        const generatedMessage = generateWAMessageFromContent(
+          jid,
+          buttonMessage,
+          { userJid: sendSocket.user!.id, messageId },
+        );
+        if (!generatedMessage.message) {
+          throw new Error("Pesan CTA tidak dapat dibentuk oleh Baileys.");
+        }
+        return await sendSocket.relayMessage(
+          jid,
+          generatedMessage.message,
+          { messageId },
+        );
       }
       const messageContent = content.imageUrl
         ? { image: { url: content.imageUrl }, caption: text }
