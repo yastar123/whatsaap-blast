@@ -7,6 +7,7 @@ import path from "node:path";
 import ExcelJS from "exceljs";
 import {
   and,
+  asc,
   count,
   desc,
   eq,
@@ -22,6 +23,8 @@ import {
   DisconnectAdminWaSessionResponse,
   CreateCampaignBody,
   CreateCampaignResponse,
+  DeleteCampaignContactsBody,
+  DeleteCampaignContactsParams,
   DeleteCampaignParams,
   DeleteCampaignResponse,
   DeleteContactParams,
@@ -544,7 +547,7 @@ router.get("/admin/contacts", async (req, res): Promise<void> => {
     .select()
     .from(contactsTable)
     .where(condition)
-    .orderBy(desc(contactsTable.sentAt))
+    .orderBy(desc(contactsTable.sentAt), asc(contactsTable.id))
     .limit(pageSize)
     .offset((page - 1) * pageSize);
   const rows = await Promise.all(
@@ -601,6 +604,113 @@ router.post("/admin/contacts", async (req, res): Promise<void> => {
     ),
   );
 });
+
+router.delete(
+  "/admin/campaigns/:campaignId/contacts",
+  async (req, res): Promise<void> => {
+    const params = DeleteCampaignContactsParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+
+    const parsedBody = DeleteCampaignContactsBody.safeParse(
+      req.body === undefined ? {} : req.body,
+    );
+    if (!parsedBody.success) {
+      res.status(400).json({ error: parsedBody.error.message });
+      return;
+    }
+    const { fromIndex, toIndex } = parsedBody.data;
+    const hasRange = fromIndex !== undefined || toIndex !== undefined;
+    const range =
+      typeof fromIndex === "number" && typeof toIndex === "number"
+        ? { fromIndex, toIndex }
+        : null;
+    if (
+      hasRange &&
+      (!range ||
+        !Number.isSafeInteger(range.fromIndex) ||
+        !Number.isSafeInteger(range.toIndex) ||
+        range.fromIndex < 1 ||
+        range.toIndex < range.fromIndex)
+    ) {
+      res.status(400).json({
+        error: "Rentang harus berisi nomor urut awal dan akhir yang valid.",
+      });
+      return;
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [campaign] = await tx
+        .select({ id: campaignsTable.id })
+        .from(campaignsTable)
+        .where(eq(campaignsTable.id, params.data.campaignId))
+        .for("update")
+        .limit(1);
+      if (!campaign) return { kind: "missing" as const };
+
+      const [running] = await tx
+        .select({ id: blastJobsTable.id })
+        .from(blastJobsTable)
+        .where(
+          and(
+            eq(blastJobsTable.campaignId, campaign.id),
+            eq(blastJobsTable.status, "running"),
+          ),
+        )
+        .limit(1);
+      if (running) return { kind: "running" as const };
+
+      if (!range) {
+        const deleted = await tx
+          .delete(contactsTable)
+          .where(eq(contactsTable.campaignId, campaign.id))
+          .returning({ id: contactsTable.id });
+        return { kind: "deleted" as const, deletedCount: deleted.length };
+      }
+
+      const targetContacts = await tx
+        .select({ id: contactsTable.id })
+        .from(contactsTable)
+        .where(eq(contactsTable.campaignId, campaign.id))
+        .orderBy(desc(contactsTable.sentAt), asc(contactsTable.id))
+        .offset(range.fromIndex - 1)
+        .limit(range.toIndex - range.fromIndex + 1)
+        .for("update");
+      if (!targetContacts.length) {
+        return { kind: "deleted" as const, deletedCount: 0 };
+      }
+
+      const deleted = await tx
+        .delete(contactsTable)
+        .where(
+          inArray(
+            contactsTable.id,
+            targetContacts.map((contact) => contact.id),
+          ),
+        )
+        .returning({ id: contactsTable.id });
+      return { kind: "deleted" as const, deletedCount: deleted.length };
+    });
+
+    if (result.kind === "missing") {
+      res.status(404).json({ error: "Campaign tidak ditemukan." });
+      return;
+    }
+    if (result.kind === "running") {
+      res.status(409).json({
+        error: "Hentikan blast kampanye sebelum menghapus kontak.",
+      });
+      return;
+    }
+    res.json({
+      success: true,
+      deletedCount: result.deletedCount,
+      message: `${result.deletedCount} kontak dihapus.`,
+    });
+  },
+);
 
 router.delete("/admin/contacts/:contactId", async (req, res): Promise<void> => {
   const params = DeleteContactParams.safeParse(req.params);

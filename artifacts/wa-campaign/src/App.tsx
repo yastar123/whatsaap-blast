@@ -22,7 +22,7 @@ import {
   useListWithdrawals, useListAdminWaSessions, useDisconnectAdminWaSession,
   useLogin, useRegister, useLogout, useCreateWaSession, useConnectWaSession,
   useDeleteWaSession, useCreateCampaign, useUpdateCampaign, useDeleteCampaign, useActivateCampaign,
-  useImportContacts, useImportContactsFile, useDeleteContact, useStartBlast, useCancelBlast, useRequestWithdrawal,
+  useImportContacts, useImportContactsFile, useDeleteContact, useDeleteCampaignContacts, useStartBlast, useCancelBlast, useRequestWithdrawal,
   useUpdateWithdrawal, useUpdateUserStatus, useUpdateSettings, setAuthTokenGetter,
   uploadCampaignImage
 } from '@workspace/api-client-react';
@@ -603,14 +603,49 @@ function ContactsPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [deleteError, setDeleteError] = useState('');
+  const [bulkDeleteNotice, setBulkDeleteNotice] = useState('');
+  const [rangeStart, setRangeStart] = useState('1');
+  const [rangeEnd, setRangeEnd] = useState('20');
   const params = useMemo(() => ({ ...(campaignId ? { campaignId } : {}), ...(search ? { search } : {}), page, pageSize: 20 }), [campaignId, search, page]);
   const contacts = useListContacts(params, { query: { queryKey: getListContactsQueryKey(params) } });
   const importer = useImportContacts();
   const fileImporter = useImportContactsFile();
   const remove = useDeleteContact();
+  const bulkRemove = useDeleteCampaignContacts();
   const qc = useQueryClient();
+  const selectedCampaign = campaigns.data?.find(campaign => campaign.id === campaignId);
   const importing = importer.isPending || fileImporter.isPending;
-  const refresh = () => { qc.invalidateQueries({ queryKey: getListContactsQueryKey(params) }); qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); };
+  const refresh = () => { qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); };
+  const deleteCampaignContacts = (range?: { fromIndex: number; toIndex: number }) => {
+    if (!selectedCampaign) return;
+    const scope = range
+      ? `kontak urutan ${range.fromIndex}–${range.toIndex}`
+      : `semua ${selectedCampaign.contactTotal.toLocaleString('id-ID')} kontak`;
+    if (!window.confirm(`Hapus ${scope} dari kampanye “${selectedCampaign.title}”? Tindakan ini tidak dapat dibatalkan dan tidak dipengaruhi pencarian.`)) return;
+    setDeleteError('');
+    setBulkDeleteNotice('');
+    bulkRemove.mutate(
+      { campaignId: selectedCampaign.id, ...(range ? { data: range } : {}) },
+      {
+        onSuccess: result => {
+          setBulkDeleteNotice(result.message);
+          setSearch('');
+          setPage(1);
+          refresh();
+        },
+        onError: e => setDeleteError(e instanceof Error ? e.message : 'Kontak kampanye tidak dapat dihapus.'),
+      },
+    );
+  };
+  const deleteContactRange = () => {
+    const fromIndex = Number(rangeStart);
+    const toIndex = Number(rangeEnd);
+    if (!Number.isSafeInteger(fromIndex) || !Number.isSafeInteger(toIndex) || fromIndex < 1 || toIndex < fromIndex) {
+      setDeleteError('Masukkan rentang nomor urut yang valid.');
+      return;
+    }
+    deleteCampaignContacts({ fromIndex, toIndex });
+  };
   const showImportResult = (result: { added: number; duplicates: number; invalid: number; consentMissing: number }) => {
     setNotice(`${result.added} kontak ditambahkan · ${result.duplicates} duplikat · ${result.invalid} tidak valid · ${result.consentMissing} tanpa consent`);
     setImportText('');
@@ -691,6 +726,20 @@ function ContactsPage() {
         <SectionTitle title="Daftar kontak" detail={`${contacts.data?.total ?? 0} kontak`} />
         {deleteError && <div className="inline-error"><CircleAlert size={15} /> {deleteError}</div>}
         <div className="filter-bar"><div className="search-field"><Search size={16} /><input placeholder="Cari nomor..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div><select value={campaignId} onChange={e => setCampaignId(e.target.value)}><option value="">Semua kampanye</option>{campaigns.data?.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select></div>
+        <div className="contact-bulk-actions">
+          <div>
+            <b>Hapus kontak kampanye</b>
+            <span>{selectedCampaign ? `Kampanye: ${selectedCampaign.title} · ${selectedCampaign.contactTotal.toLocaleString('id-ID')} kontak` : 'Pilih satu kampanye pada filter untuk mengaktifkan penghapusan.'}</span>
+            <span>Rentang dihitung dari daftar kampanye (waktu kirim terbaru lebih dahulu) dan tidak dipengaruhi pencarian.</span>
+          </div>
+          <div className="contact-bulk-controls">
+            <label>Mulai dari<input type="number" min="1" step="1" value={rangeStart} onChange={e => setRangeStart(e.target.value)} /></label>
+            <label>Sampai<input type="number" min="1" step="1" value={rangeEnd} onChange={e => setRangeEnd(e.target.value)} /></label>
+            <button type="button" className="button button-secondary button-small" disabled={!selectedCampaign || bulkRemove.isPending} onClick={deleteContactRange}>{bulkRemove.isPending ? 'Menghapus…' : 'Hapus rentang'}</button>
+            <button type="button" className="button button-danger button-small" disabled={!selectedCampaign || selectedCampaign.contactTotal === 0 || bulkRemove.isPending} onClick={() => deleteCampaignContacts()}>{bulkRemove.isPending ? 'Menghapus…' : 'Hapus semua kampanye'}</button>
+          </div>
+        </div>
+        {bulkDeleteNotice && <div className="inline-success"><CheckCircle2 size={15} /> {bulkDeleteNotice}</div>}
         <div className="table-scroll"><table><thead><tr><th>Nomor</th><th>Status</th><th>Sumber consent</th><th>Persetujuan</th><th /></tr></thead><tbody>{contacts.isLoading ? <tr><td colSpan={5}>Memuat daftar kontak...</td></tr> : contacts.data?.items.length ? contacts.data.items.map((c: Contact) => <tr key={c.id}><td className="mono">{c.phone}</td><td><Status value={c.status} /></td><td>{c.consentSource || '—'}{c.consentRevokedAt && <small className="error-reason">Dicabut {date(c.consentRevokedAt)}</small>}</td><td>{date(c.consentAt)}</td><td><button className="icon-button danger-icon" disabled={remove.isPending} aria-label={`Hapus kontak ${c.phone}`} onClick={() => { if (window.confirm(`Hapus kontak ${c.phone}?`)) { setDeleteError(''); remove.mutate({ contactId: c.id }, { onSuccess: refresh, onError: e => { setDeleteError(e instanceof Error ? e.message : 'Kontak tidak dapat dihapus.'); refresh(); } }); } }}><X size={15} /></button></td></tr>) : <tr><td colSpan={5}><Empty title="Belum ada kontak" text="Pilih kampanye dan impor kontak yang sudah memberi consent." /></td></tr>}</tbody></table></div>
         <div className="table-footer"><span>Halaman {page} · {contacts.data?.total ?? 0} kontak</span><div><button className="button button-secondary button-small" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Sebelumnya</button><button className="button button-secondary button-small" disabled={!contacts.data || page * contacts.data.pageSize >= contacts.data.total} onClick={() => setPage(p => p + 1)}>Berikutnya</button></div></div>
       </section>

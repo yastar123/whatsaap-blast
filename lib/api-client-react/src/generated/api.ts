@@ -28,6 +28,8 @@ import type {
   BlastJob,
   BlastStartInput,
   Campaign,
+  CampaignContactsDeleteInput,
+  CampaignContactsDeleteResult,
   CampaignImageUploadInput,
   CampaignImageUploadResponse,
   CampaignInput,
@@ -1866,6 +1868,95 @@ export const useImportContacts = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getImportContactsMutationOptions(options));
+    }
+
+export const getDeleteCampaignContactsUrl = (campaignId: string,) => {
+
+
+
+
+  return `/api/admin/campaigns/${campaignId}/contacts`
+}
+
+/**
+ * @summary Delete all or a range of contacts from a campaign
+ */
+export const deleteCampaignContacts = async (campaignId: string,
+    campaignContactsDeleteInput?: CampaignContactsDeleteInput, options?: Parameters<typeof customFetch>[1]): Promise<CampaignContactsDeleteResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CampaignContactsDeleteResult>(getDeleteCampaignContactsUrl(campaignId),
+  {
+    ...options,
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(campaignContactsDeleteInput)
+  }
+);}
+
+
+
+
+
+export const getDeleteCampaignContactsMutationKey = () => ['deleteCampaignContacts'] as const;
+
+export const getDeleteCampaignContactsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCampaignContacts>>, TError,DeleteCampaignContactsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCampaignContacts>>, TError,DeleteCampaignContactsMutationVariables, TContext> => {
+
+const mutationKey = getDeleteCampaignContactsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCampaignContacts>>, DeleteCampaignContactsMutationVariables> = (props) => {
+          const {campaignId,data} = props ?? {};
+
+          return  deleteCampaignContacts(campaignId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCampaignContactsMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCampaignContacts>>>
+    export type DeleteCampaignContactsMutationBody = BodyType<CampaignContactsDeleteInput> | undefined
+    export type DeleteCampaignContactsMutationError = ErrorType<void>
+    export type DeleteCampaignContactsMutationVariables = {campaignId: string;data?: BodyType<CampaignContactsDeleteInput>}
+
+    /**
+ * @summary Delete all or a range of contacts from a campaign
+ */
+export const useDeleteCampaignContacts = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCampaignContacts>>, TError,DeleteCampaignContactsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteCampaignContacts>>,
+        TError,
+        DeleteCampaignContactsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteCampaignContactsMutationOptions(options));
     }
 
 export const getDownloadContactTemplateUrl = (format: 'csv' | 'xlsx',) => {

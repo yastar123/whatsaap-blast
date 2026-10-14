@@ -539,6 +539,52 @@ async function apiTests() {
       created.contactId = null;
     }
   }
+  if (created.campaignId) {
+    await pool.query(
+      `INSERT INTO contacts (campaign_id, phone, status)
+       VALUES ($1, $2, 'unsent'), ($1, $3, 'unsent'), ($1, $4, 'unsent')`,
+      [
+        created.campaignId,
+        `628${suffix.slice(0, 10)}4`,
+        `628${suffix.slice(0, 10)}5`,
+        `628${suffix.slice(0, 10)}6`,
+      ],
+    );
+    const deletedRange = await request(
+      `/admin/campaigns/${created.campaignId}/contacts`,
+      {
+        method: "DELETE",
+        token: admin.accessToken,
+        body: { fromIndex: 1, toIndex: 2 },
+      },
+    );
+    expectStatus("admin deletes a campaign contact range", deletedRange, 200);
+    check("contact range deletion removes exactly the selected rows", deletedRange.data?.deletedCount === 2);
+    const invalidRange = await request(
+      `/admin/campaigns/${created.campaignId}/contacts`,
+      {
+        method: "DELETE",
+        token: admin.accessToken,
+        body: { fromIndex: 2, toIndex: 1 },
+      },
+    );
+    expectStatus("campaign contact deletion validates range order", invalidRange, 400);
+    const invalidBody = await request(
+      `/admin/campaigns/${created.campaignId}/contacts`,
+      {
+        method: "DELETE",
+        token: admin.accessToken,
+        body: [],
+      },
+    );
+    expectStatus("campaign contact deletion rejects a malformed body", invalidBody, 400);
+    const deletedCampaignContacts = await request(
+      `/admin/campaigns/${created.campaignId}/contacts`,
+      { method: "DELETE", token: admin.accessToken },
+    );
+    expectStatus("admin deletes all contacts in a campaign", deletedCampaignContacts, 200);
+    check("delete-all removes the remaining campaign contacts", deletedCampaignContacts.data?.deletedCount === 1);
+  }
   const missingActivation = await request(`/admin/campaigns/${randomUUID()}/activate`, {
     method: "POST",
     token: admin.accessToken,

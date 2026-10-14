@@ -400,6 +400,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ImportResult"
+  /admin/campaigns/{campaignId}/contacts:
+    delete:
+      operationId: deleteCampaignContacts
+      tags: [contacts, admin]
+      summary: Delete all or a range of contacts from a campaign
+      parameters:
+        - name: campaignId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CampaignContactsDeleteInput"
+      responses:
+        "200":
+          description: Campaign contacts deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignContactsDeleteResult"
+        "404":
+          description: Campaign not found
+        "409":
+          description: A blast for the campaign is running
   /admin/contacts/template/{format}:
     get:
       operationId: downloadContactTemplate
@@ -966,6 +993,19 @@ components:
           maxItems: 1000
         consentConfirmed: { type: boolean }
       required: [campaignId, contacts]
+    CampaignContactsDeleteInput:
+      type: object
+      properties:
+        fromIndex: { type: integer, minimum: 1 }
+        toIndex: { type: integer, minimum: 1 }
+      required: []
+    CampaignContactsDeleteResult:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        deletedCount: { type: integer }
+      required: [success, message, deletedCount]
     ContactFileImportInput:
       type: object
       properties:

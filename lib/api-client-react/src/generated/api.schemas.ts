@@ -304,6 +304,19 @@ export interface ContactImportInput {
   consentConfirmed?: boolean;
 }
 
+export interface CampaignContactsDeleteInput {
+  /** @minimum 1 */
+  fromIndex?: number;
+  /** @minimum 1 */
+  toIndex?: number;
+}
+
+export interface CampaignContactsDeleteResult {
+  success: boolean;
+  message: string;
+  deletedCount: number;
+}
+
 export type ContactFileImportInputConsentConfirmed = typeof ContactFileImportInputConsentConfirmed[keyof typeof ContactFileImportInputConsentConfirmed];
 
 

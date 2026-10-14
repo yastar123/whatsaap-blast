@@ -480,6 +480,29 @@ export const ImportContactsResponse = zod.object({
 
 
 /**
+ * @summary Delete all or a range of contacts from a campaign
+ */
+export const DeleteCampaignContactsParams = zod.object({
+  "campaignId": zod.coerce.string()
+})
+
+
+
+
+
+export const DeleteCampaignContactsBody = zod.object({
+  "fromIndex": zod.number().int().min(1).optional(),
+  "toIndex": zod.number().int().min(1).optional()
+})
+
+export const DeleteCampaignContactsResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string(),
+  "deletedCount": zod.number().int()
+})
+
+
+/**
  * @summary Download a one-column phone contact template
  */
 export const DownloadContactTemplateParams = zod.object({

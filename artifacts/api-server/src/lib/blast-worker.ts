@@ -612,6 +612,21 @@ export async function startBlast(
     );
   const total = eligible?.value ?? 0;
   const job = await db.transaction(async (tx) => {
+    const [lockedCampaign] = await tx
+      .select({ id: campaignsTable.id })
+      .from(campaignsTable)
+      .where(
+        and(
+          eq(campaignsTable.id, activeCampaign.id),
+          eq(campaignsTable.isActive, true),
+          eq(campaignsTable.status, "active"),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if (!lockedCampaign) {
+      throw new Error("Admin belum memilih campaign aktif.");
+    }
     const [user] = await tx
       .select({ id: usersTable.id })
       .from(usersTable)

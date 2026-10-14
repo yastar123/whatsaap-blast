@@ -19,6 +19,8 @@ export * from './blastJobStatus';
 export * from './blastStartInput';
 export * from './blastStartInputDelaySeconds';
 export * from './campaign';
+export * from './campaignContactsDeleteInput';
+export * from './campaignContactsDeleteResult';
 export * from './campaignImageUploadInput';
 export * from './campaignImageUploadResponse';
 export * from './campaignInput';
